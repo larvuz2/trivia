@@ -534,6 +534,118 @@ export class World {
     this.spotOn = 0;
   }
 
+  // ---------------- intro section: moving beams + the salon entrance ----------------
+  buildIntroRig() {
+    if (this.beams) return;
+    this.introDim = 0;
+    this.introDimTarget = 0;
+    this.beams = [];
+    const colors = ['#ff4fb0', '#3ce6ff', '#a66bff', '#ffd36b', '#4dffb5'];
+    const mounts = [[5.7, 2.55, 2.1], [-5.7, 2.55, 2.1], [2.2, 2.6, 2.1], [-2.2, 2.6, 2.1], [0, 3.6, -8.4]];
+    const beamGeo = new THREE.ConeGeometry(1, 1, 24, 1, true);
+    beamGeo.translate(0, -0.5, 0);
+    beamGeo.rotateX(-Math.PI / 2); // cone tip at origin, opening toward +z
+    mounts.forEach(([x, y, z], i) => {
+      const col = new THREE.Color(colors[i % colors.length]);
+      const light = new THREE.SpotLight(col, 0, 26, 0.32, 0.6, 1.1);
+      light.position.set(x, y, z);
+      this.stage.add(light);
+      this.stage.add(light.target);
+      const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const beam = new THREE.Mesh(beamGeo, mat);
+      beam.position.set(x, y, z);
+      beam.renderOrder = 5;
+      this.stage.add(beam);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.28, 12), new THREE.MeshStandardMaterial({ color: '#1b1d26', emissive: col, emissiveIntensity: 0.6 }));
+      head.position.set(x, y, z);
+      this.stage.add(head);
+      this.beams.push({ light, beam, head, phase: i * 1.9, speed: 0.55 + (i % 3) * 0.18 });
+    });
+    this.beamsOn = 0;
+    this.beamsTarget = 0;
+
+    // salon entrance: warm party glow behind sliding glass doors
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 384;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, 384);
+    grd.addColorStop(0, '#ff9a6b');
+    grd.addColorStop(0.55, '#ff6fa8');
+    grd.addColorStop(1, '#5b2a7a');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 512, 384);
+    for (let i = 0; i < 70; i++) {
+      const r = 6 + Math.random() * 26;
+      const bx = Math.random() * 512;
+      const by = Math.random() * 260;
+      const rg = g.createRadialGradient(bx, by, 0, bx, by, r);
+      const hue = ['255,230,160', '255,140,200', '120,230,255', '255,255,255'][i % 4];
+      rg.addColorStop(0, `rgba(${hue},0.9)`);
+      rg.addColorStop(1, `rgba(${hue},0)`);
+      g.fillStyle = rg;
+      g.fillRect(bx - r, by - r, r * 2, r * 2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const z = 7.93;
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 2.45), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.25, 0.25, 0.25) }));
+    glow.rotation.y = Math.PI;
+    glow.position.set(0, 1.225, z);
+    this.stage.add(glow);
+    this.doorGlow = glow;
+    const doorMat = new THREE.MeshStandardMaterial({ color: '#14213d', metalness: 0.4, roughness: 0.06, envMap: this.envMap, envMapIntensity: 1 });
+    this.doors = [-1, 1].map((sgn) => {
+      const d = new THREE.Mesh(new THREE.BoxGeometry(1.66, 2.45, 0.05), doorMat);
+      d.position.set(sgn * 0.83, 1.225, z - 0.05);
+      d.userData = { closedX: sgn * 0.83, openX: sgn * 2.45 };
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.45, 0.07), new THREE.MeshStandardMaterial({ color: '#eceef2', metalness: 1, roughness: 0.16, envMap: this.envMap }));
+      frame.position.x = -sgn * 0.8;
+      d.add(frame);
+      this.stage.add(d);
+      return d;
+    });
+    this.doorOpen = 0;
+    this.doorTarget = 0;
+    this.doorLight = new THREE.PointLight('#ffb07a', 0, 9, 1.5);
+    this.doorLight.position.set(0, 1.6, 7.2);
+    this.stage.add(this.doorLight);
+  }
+
+  setIntroMode(on) {
+    this.buildIntroRig();
+    this.introDimTarget = on ? 1 : 0;
+    this.beamsTarget = on ? 1 : 0;
+  }
+
+  setDoors(open) { this.buildIntroRig(); this.doorTarget = open ? 1 : 0; }
+
+  updateIntroRig(dt, t) {
+    if (!this.beams) return;
+    const k = Math.min(1, dt * 2.5);
+    this.beamsOn += (this.beamsTarget - this.beamsOn) * k;
+    this.introDim += (this.introDimTarget - this.introDim) * Math.min(1, dt * 1.5);
+    for (const b of this.beams) {
+      const a = t * b.speed + b.phase;
+      const tx = Math.sin(a) * 3.2;
+      const tz = 1.2 + Math.cos(a * 1.3) * 3.0;
+      b.light.target.position.set(tx, 0, tz);
+      b.light.intensity = this.beamsOn * 45;
+      const dir = new THREE.Vector3(tx, 0, tz).sub(b.beam.position);
+      const len = dir.length();
+      b.beam.scale.set(Math.tan(0.32) * len, Math.tan(0.32) * len, len);
+      b.beam.lookAt(this.stage.localToWorld(new THREE.Vector3(tx, 0, tz)));
+      b.beam.material.opacity = this.beamsOn * (0.07 + 0.03 * Math.sin(t * 3 + b.phase));
+      b.beam.visible = this.beamsOn > 0.01;
+      b.head.visible = this.beamsOn > 0.01;
+      b.head.lookAt(this.stage.localToWorld(new THREE.Vector3(tx, 0, tz)));
+    }
+    this.doorOpen += (this.doorTarget - this.doorOpen) * Math.min(1, dt * 3);
+    for (const d of this.doors) d.position.x = d.userData.closedX + (d.userData.openX - d.userData.closedX) * this.doorOpen;
+    this.doorGlow.material.color.setScalar(0.25 + 0.75 * this.doorOpen);
+    this.doorLight.intensity = this.doorOpen * 25;
+  }
+
   /** Point the spotlight at a stage-local position (or null to switch it off). */
   setSpotlight(pos) {
     this.spotTargetOn = pos ? 1 : 0;
@@ -646,10 +758,17 @@ export class World {
       f.rotation.y = Math.sin(t * 0.15 + d.phase) * 1.2;
       f.rotation.z = Math.sin(t * 1.1 + d.phase) * 0.05;
     }
+    // intro section: dim the world so the party lights pop
+    if (this.introDim) {
+      this.sun.intensity *= 1 - 0.6 * this.introDim;
+      this.farSun.intensity *= 1 - 0.5 * this.introDim;
+      this.hemi.intensity *= 1 - 0.55 * this.introDim;
+    }
+    this.updateIntroRig(dt, t);
     if (this.partyLights) {
       this.partyLights.forEach((l, i) => { l.intensity = (0.15 + night * 0.85) * (16 + Math.sin(t * 2 + i * 2) * 5); });
       this.spotOn += ((this.spotTargetOn || 0) - this.spotOn) * Math.min(1, dt * 4);
-      this.spot.intensity = this.spotOn * (60 + night * 60);
+      this.spot.intensity = this.spotOn * (60 + night * 60 + (this.introDim || 0) * 60);
     }
 
     this.clouds.children.forEach((c) => {

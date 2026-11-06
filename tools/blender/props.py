@@ -423,6 +423,47 @@ def make_pelican():
     return b, wings
 
 
+def make_seagull():
+    """Yellow-footed gull (the Sea of Cortez gull): white body, slate wings with black tips."""
+    body = sphere((0, 0, 0), (0.32, 0.75, 0.3), seg=12, rings=8)
+    head = sphere((0, 0.72, 0.22), (0.22, 0.24, 0.21), seg=10, rings=7)
+    beak = cyl((0, 1.02, 0.18), 0.06, 0.32, verts=6, r2=0.015, rot=(math.radians(-95), 0, 0))
+    tail = cyl((0, -0.85, 0.02), 0.22, 0.4, verts=6, r2=0.04, rot=(math.radians(95), 0, 0))
+    eyes = [sphere((s * 0.13, 0.82, 0.3), (0.035, 0.035, 0.035), seg=6, rings=4) for s in (-1, 1)]
+    b = join([body, head, beak, tail] + eyes, 'seagull')
+    flat(b)
+
+    def fn(c, n, p):
+        x, y, z = c
+        if z < -0.92:
+            return hex_rgb('#ffcc33')
+        if abs(x) > 0.1 and y > 0.24 and z < -0.75 and abs(x) < 0.17:
+            return hex_rgb('#1d1d24')
+        if z > 1.0:
+            return hex_rgb('#c9ced6')
+        return hex_rgb('#fbfbf7') if n[1] > -0.5 else hex_rgb('#e9ecef')
+    paint(b, fn=fn)
+    finish(b, 'seagull')
+    wings = []
+    for s, nm in ((1, 'seagull_wingL'), (-1, 'seagull_wingR')):
+        w = cube((s * 1.0, -0.05, 0.08), (0.9, 0.34, 0.04))
+        for v in w.data.vertices:
+            k = abs(v.co.x) / 2.0
+            v.co.y = v.co.y * (1 - 0.6 * k) - 0.45 * k * k
+            v.co.z += 0.1 * math.sin(k * math.pi)
+        flat(w)
+        paint(w, fn=lambda c, n, p: hex_rgb('#1d1d24') if abs(c[0]) > 1.55 else hex_rgb('#8a93a3') if n[1] > 0 else hex_rgb('#f2f2ee'))
+        w = finish(w, nm)
+        w.parent = b
+        wings.append(w)
+    for w, s in zip(wings, (1, -1)):
+        select_only([w])
+        bpy.context.scene.cursor.location = (s * 0.2, 0, 0.1)
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+    bpy.context.scene.cursor.location = (0, 0, 0)
+    return b, wings
+
+
 def make_sealion():
     body = sphere((0, 0, 0.55), (0.65, 1.2, 0.5), seg=12, rings=8)
     chest = sphere((0, 0.75, 0.9), (0.5, 0.5, 0.6), seg=12, rings=8)
@@ -483,9 +524,10 @@ def build(out_dir):
         make_dolphin(),
     ]
     pel, wings = make_pelican()
+    gull, gwings = make_seagull()
     # spread the props out in the file so they're easy to inspect in Blender (game re-positions them)
-    for i, o in enumerate(objs + [pel]):
+    for i, o in enumerate(objs + [pel, gull]):
         o.location = (i * 30, 0, 0)
-    export_glb(os.path.join(out_dir, 'props.glb'), objs + [pel] + wings)
-    for o in objs + [pel]:
+    export_glb(os.path.join(out_dir, 'props.glb'), objs + [pel, gull] + wings + gwings)
+    for o in objs + [pel, gull]:
         print(o.name, len(o.data.polygons))

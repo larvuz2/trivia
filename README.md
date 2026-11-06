@@ -17,20 +17,29 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
 
 ## The game flow
 
-1. **Main menu** — the eight characters hang out on the party yacht: one DJs, two sit at the bar, a couple lounges,
-   a couple dances. Click the glowing **START** button on the LED dance floor (or press Enter).
-2. **Choose your teams** — press SHUFFLE: drumroll, then the couples dash (and sometimes faceplant) into two teams on deck.
+1. **Main menu** — just the yacht and the Sea of Cortez (nobody on deck yet). Click the glowing **START** button on
+   the LED dance floor (or press Enter).
+2. **Opening cinematic (~15 s)** — letterboxed, with fades through black: a low angle as the yacht cruises in with its
+   wake, a seagull tracking alongside, then the DJ drops the beat and the deck lights up. *Skip intro* / Esc skips it.
+3. **Introducing the gang** — fixed camera on deck at night, party beams sweeping. One at a time the salon doors slide
+   open and a character walks out to their mark: confetti cannons, crowd cheer, a lower-third name plate, and a loop
+   pose. **Host: click (or Space) for the next one** — they walk past the camera and a big title card introduces the
+   next guest. After the eighth, the whole gang walks in and the TV on deck shows **▶ START GAME** — click the TV
+   (or press Enter) to continue. Taglines are editable in Setup → Characters.
+   The loop pose is a placeholder: a rigged `.glb` with a clip named `intro` / `pose` / `showoff` plays instead
+   (`walk` / `run` clips are used for walking).
+4. **Choose your teams** — press SHUFFLE: drumroll, then the couples dash (and sometimes faceplant) into two teams on deck.
    Shuffle again or lock the teams.
-3. **Team reveal** — Team Sunset vs Team Tidal Wave.
-4. **"NAME'S TURN!"** — every turn belongs to one player. Teams alternate and each team's girls take turns.
+5. **Team reveal** — Team Sunset vs Team Tidal Wave.
+6. **"NAME'S TURN!"** — every turn belongs to one player. Teams alternate and each team's girls take turns.
    Only that character stays on deck, in a spotlight, with her name huge on screen.
-5. **The board** — a glass panel fills most of the screen; the player and the sea stay visible on the left.
+7. **The board** — a glass panel fills most of the screen; the player and the sea stay visible on the left.
    She picks a tile, it flips, and a short category moment plays next to her (photo album, treasure chest, heart,
    camera dive into the water, spinning wheel).
-6. **Question** — the host scores it. On a miss the other team's player pops onto deck to steal.
+8. **Question** — the host scores it. On a miss the other team's player pops onto deck to steal.
    If the question is about one of the boys, he pops in to react; Ask the Boys brings the team's boys over for a hint.
-7. **Final Splash** — secret wagers, one last question.
-8. **Yacht champions** — the winners dance around the START button, the losers sulk on the sofas.
+9. **Final Splash** — secret wagers, one last question.
+10. **Yacht champions** — the winners dance around the START button, the losers sulk on the sofas.
 
 The sky slowly turns from afternoon to golden hour to a party night as the board empties, and the yacht's LEDs,
 neon sign, string lights, hot tub and dance floor glow brighter.
@@ -141,8 +150,9 @@ Game progress also auto-saves, so a refresh offers **Continue saved game**.
 | `src/fx.js` | Confetti, splashes and the five category cinematic props |
 | `src/camera.js` | Camera shots, orbits, shake |
 | `src/game.js` | Rules: teams, turns, scoring, steal, undo, Double Trouble, Final Splash |
+| `src/intro.js` | Opening cinematic (shots, fades, letterbox, captions, cruising yacht, seagulls) and the character introductions (doors, walk-outs, title cards, finale, START GAME TV) |
 | `src/main.js` | Screens / state machine (deck start button, teams, turns, glass board panel), cinematics, host controls |
 | `src/admin.js` | Setup panel |
 | `src/storage.js` | localStorage + IndexedDB persistence, export / import |
-| `src/audio.js` | Synthesized sound effects and music loop |
+| `src/audio.js` | Synthesized SFX + adaptive music: a beat-synced sequencer with layers (pad, arp, bass, kick, hats, clap, shaker), states that crossfade (menu, cinematic, party, duck, game, question) and stingers (riser, impact, airhorn, crowd cheer, confetti cannon) |
 | `src/data.js` | Default characters, categories, questions and settings |

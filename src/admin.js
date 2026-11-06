@@ -61,7 +61,10 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
           <div class="char-top">
             <img class="sticker md" src="${st}">
             <div class="grow">
-              <label>Name<input data-f="name" value="${esc(c.name)}"></label>
+              <div class="row">
+                <label class="grow">Name<input data-f="name" value="${esc(c.name)}"></label>
+                <label class="grow">Intro tagline<input data-f="tagline" value="${esc(c.tagline || '')}" placeholder="The Captain"></label>
+              </div>
               <div class="row">
                 <label>Role<select data-f="role"><option value="girl" ${c.role === 'girl' ? 'selected' : ''}>Girl (player)</option><option value="boy" ${c.role === 'boy' ? 'selected' : ''}>Boy (subject)</option></select></label>
                 <label>Couple<select data-f="couple">${[0, 1, 2, 3].map((k) => `<option value="${k}" ${c.couple === k ? 'selected' : ''}>Couple ${k + 1}</option>`).join('')}</select></label>

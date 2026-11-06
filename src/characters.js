@@ -319,7 +319,8 @@ export class Character {
   playClip(state) {
     if (!this.mixer || !this.clips) return;
     const aliases = {
-      idle: ['idle', 'stand'], walk: ['run', 'walk'], cheer: ['cheer', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
+      idle: ['idle', 'stand'], walk: this.speed < 3.2 ? ['walk', 'run'] : ['run', 'walk'],
+      intro: ['intro', 'pose', 'showoff', 'idle'], sit: ['sit'], dj: ['dj', 'dance'], wave: ['wave', 'hello'], cheer: ['cheer', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
       laugh: ['laugh'], dance: ['dance'], surprise: ['surprise', 'surprised'], sleep: ['sleep', 'idle'], point: ['point', 'wave'], stumble: ['fall', 'trip', 'stumble'],
     };
     const names = aliases[state] || [state];
@@ -345,7 +346,10 @@ export class Character {
     if (state === 'cheer' && Math.random() < 0.5) this.showEmote('cheer', 1.8);
   }
 
-  react(state, dur = 2.4) { this.setState(state, dur); }
+  react(state, dur = 2.4) {
+    if (this.target) return; // don't interrupt someone who's walking somewhere
+    this.setState(state, dur);
+  }
 
   /** Hang out: 'idle' | 'sit' | 'dance' | 'dj'. */
   hangOut(pose, seatY = 0.95) {
@@ -453,12 +457,15 @@ export class Character {
         p.x += (dx / dist) * step;
         p.z += (dz / dist) * step;
         this.targetFacing = Math.atan2(dx, dz);
-        const cyc = T * 14;
-        b.position.y = Math.abs(Math.sin(cyc)) * 0.18;
-        b.rotation.x = 0.18;
-        footA = Math.sin(cyc) * 0.7;
-        armLx = -Math.sin(cyc) * 0.9;
-        armRx = Math.sin(cyc) * 0.9;
+        // stroll vs run: cadence, bounce and lean scale with speed
+        const run = Math.min(1, Math.max(0, (this.speed - 2.2) / 2.5));
+        const cyc = T * (7 + run * 7);
+        b.position.y = Math.abs(Math.sin(cyc)) * (0.07 + run * 0.11);
+        b.rotation.x = 0.04 + run * 0.14;
+        b.rotation.z = Math.sin(cyc) * 0.05 * (1 - run);
+        footA = Math.sin(cyc) * (0.45 + run * 0.25);
+        armLx = -Math.sin(cyc) * (0.5 + run * 0.4);
+        armRx = Math.sin(cyc) * (0.5 + run * 0.4);
         break;
       }
       case 'stumble': {
@@ -554,6 +561,18 @@ export class Character {
         armRx = -1.2 + Math.sin(beat) * 0.15;
         armL = Math.sin(T * 0.9) > 0.6 ? 2.6 : 0.6;
         armLx = Math.sin(T * 0.9) > 0.6 ? 0 : -1.1;
+        break;
+      }
+      case 'intro': {
+        // placeholder "showing off" loop until the real rigged animation arrives (clip: intro / pose / showoff)
+        const beat = T * 4.2;
+        const phase = Math.floor(T / 2.6) % 3;
+        b.position.y = Math.abs(Math.sin(beat)) * 0.06;
+        b.rotation.z = Math.sin(beat / 2) * 0.06;
+        headTilt = Math.sin(beat / 2) * 0.12;
+        if (phase === 0) { armR = -2.6 + Math.sin(T * 10) * 0.35; armL = 0.9; armLx = 0.6; }
+        else if (phase === 1) { armL = 2.4 + Math.sin(beat) * 0.3; armR = -2.4 - Math.sin(beat) * 0.3; b.rotation.y = Math.sin(beat / 2) * 0.4; }
+        else { armL = 1.1; armR = -1.1; armLx = armRx = 0.7; b.rotation.y = Math.sin(T * 1.5) * 0.25; }
         break;
       }
       case 'wave': {

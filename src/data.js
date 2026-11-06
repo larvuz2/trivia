@@ -8,6 +8,11 @@ const COLORS = {
   girls: ['#ff6b8b', '#ffb020', '#22c3d6', '#e055c8'],
 };
 
+const TAGLINES = {
+  boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
+  girls: ['The Brains', 'The Trivia Queen', 'The Secret Weapon', 'The Closer'],
+};
+
 export function defaultCharacters() {
   const chars = [];
   for (let i = 0; i < 4; i++) {
@@ -16,6 +21,7 @@ export function defaultCharacters() {
       name: `Guy ${i + 1}`,
       role: 'boy',
       couple: i,
+      tagline: TAGLINES.boys[i],
       color: COLORS.boys[i],
       sticker: null, // media ref (idb:key or url)
       model: null, // media ref for a .glb file
@@ -25,6 +31,7 @@ export function defaultCharacters() {
       name: `Girl ${i + 1}`,
       role: 'girl',
       couple: i,
+      tagline: TAGLINES.girls[i],
       color: COLORS.girls[i],
       sticker: null,
       model: null,

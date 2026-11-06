@@ -27,12 +27,21 @@ export class CameraRig {
     this.shiftTarget = 0;
   }
 
+  /** Track a moving subject: fn(dt) -> { pos, look } every frame until another move is issued. */
+  follow(fn) {
+    this.finishPending();
+    this.orbit = null;
+    this.to = null;
+    this.followFn = fn;
+  }
+
   /** Slide the framing sideways: 0 = centred, 0.33 = look target sits in the left third of the screen. */
   setShift(v) { this.shiftTarget = v; }
 
   /** Move to a shot. Returns a promise that resolves when the move ends. */
   shot(pos, look, dur = 1.6, easing = 'inOut', fov = null) {
     this.finishPending();
+    this.followFn = null;
     this.orbit = null;
     this.from = { pos: this.pos.clone(), look: this.look.clone() };
     this.to = { pos: pos.clone(), look: look.clone() };
@@ -51,6 +60,7 @@ export class CameraRig {
 
   cut(pos, look, fov = null) {
     this.finishPending();
+    this.followFn = null;
     this.orbit = null;
     this.to = null;
     this.pos.copy(pos);
@@ -61,6 +71,7 @@ export class CameraRig {
   /** Circle a point. With `swing` (radians) the camera sways back and forth instead of going all the way round. */
   startOrbit(center, radius, height, speed = 0.05, startAngle = null, lookOffset = new THREE.Vector3(), swing = 0) {
     this.finishPending();
+    this.followFn = null;
     const a = startAngle ?? Math.atan2(this.pos.x - center.x, this.pos.z - center.z);
     this.orbit = { center: center.clone(), radius, height, speed, angle: a, base: a, t: 0, swing, lookOffset };
     this.to = null;
@@ -70,7 +81,10 @@ export class CameraRig {
 
   update(dt) {
     this.time += dt;
-    if (this.to) {
+    if (this.followFn) {
+      const r = this.followFn(dt);
+      if (r) { this.pos.copy(r.pos); this.look.copy(r.look); }
+    } else if (this.to) {
       this.t += dt / this.dur;
       const k = this.easing(Math.min(1, this.t));
       this.pos.lerpVectors(this.from.pos, this.to.pos, k);

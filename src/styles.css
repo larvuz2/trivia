@@ -503,3 +503,66 @@ textarea { resize: vertical; }
   .tp-header .tc-stickers, .tp-header .tc-ask { display: none; }
 }
 .q-card.final .q-scores { bottom: auto; top: 12px; right: auto; left: 50%; transform: translateX(-50%); }
+
+/* =================================================================
+   Opening cinematic + "Introducing the gang"
+   ================================================================= */
+.fader { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 90; transition-property: opacity; transition-timing-function: ease-in-out; }
+.letterbox { position: fixed; inset: 0; pointer-events: none; z-index: 85; }
+.letterbox > div { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height 0.9s cubic-bezier(.6,0,.2,1); }
+.lb-top { top: 0; }
+.lb-bottom { bottom: 0; }
+.letterbox.on > div { height: 11vh; }
+.cine-caption {
+  position: fixed; left: 6vw; bottom: 15vh; z-index: 86; pointer-events: none; color: #fff;
+  opacity: 0; transform: translateY(14px); transition: opacity 0.8s ease, transform 0.8s ease;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+}
+.cine-caption.show { opacity: 1; transform: none; }
+.cc-main { font-family: var(--display); font-size: clamp(22px, 3vw, 44px); letter-spacing: 0.32em; }
+.cc-sub { font-family: var(--body); font-weight: 500; font-size: clamp(13px, 1.4vw, 19px); letter-spacing: 0.4em; text-transform: uppercase; opacity: 0.85; margin-top: 4px; }
+.skip-btn {
+  position: fixed; right: 18px; bottom: calc(11vh + 14px); z-index: 95; display: none; cursor: pointer;
+  font-family: var(--body); font-weight: 600; font-size: 14px; color: #fff; background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.35); border-radius: 99px; padding: 8px 16px; backdrop-filter: blur(4px);
+}
+.skip-btn.show { display: block; }
+.skip-btn:hover { background: rgba(255,255,255,0.28); }
+
+.title-card {
+  position: fixed; inset: 0; z-index: 80; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(20, 10, 40, 0.55), rgba(10, 5, 25, 0.85));
+  opacity: 0; transition: opacity 0.45s ease;
+}
+.title-card.show { opacity: 1; }
+.title-card .tcard-kicker, .title-card .tcard-name, .title-card .tcard-tag { transition: transform 0.6s cubic-bezier(.2,1.5,.4,1), opacity 0.45s ease, letter-spacing 2.6s ease-out; opacity: 0; }
+.title-card.show .tcard-kicker, .title-card.show .tcard-name, .title-card.show .tcard-tag { opacity: 1; transform: none; }
+.title-card.hide .tcard-name { transform: scale(1.12); letter-spacing: 0.08em; }
+.tcard-kicker { font-family: var(--display); color: var(--gold); letter-spacing: 0.5em; font-size: clamp(16px, 2.2vw, 30px); transform: translateY(-30px); }
+.tcard-name {
+  font-family: var(--display); font-size: clamp(60px, 13vw, 200px); line-height: 1; color: #fff; text-align: center; padding: 0 4vw;
+  -webkit-text-stroke: 6px var(--c); paint-order: stroke fill; text-shadow: 0 10px 0 rgba(0,0,0,0.35), 0 0 60px var(--c);
+  transform: scale(1.6); letter-spacing: 0.02em;
+}
+.title-card.show .tcard-name { letter-spacing: 0.06em; }
+.tcard-tag { margin-top: 14px; font-family: var(--body); font-weight: 600; font-size: clamp(16px, 2vw, 28px); color: #fff; letter-spacing: 0.25em; text-transform: uppercase; transform: translateY(30px); }
+
+.intro-plate {
+  position: fixed; left: 4vw; bottom: 7vh; z-index: 60; display: flex; align-items: center; gap: 14px; pointer-events: none;
+  background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 40%, transparent)); color: #fff;
+  padding: 10px 40px 10px 10px; border-radius: 99px 18px 18px 99px; border-left: 6px solid #fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35); animation: plate-in 0.6s cubic-bezier(.2,1.4,.4,1) both;
+}
+.intro-plate.out { animation: plate-out 0.4s ease-in both; }
+.ip-name { font-family: var(--display); font-size: clamp(30px, 3.6vw, 54px); line-height: 1; text-shadow: 0 3px 0 rgba(0,0,0,0.25); }
+.ip-tag { font-weight: 600; font-size: clamp(13px, 1.3vw, 18px); letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.95; }
+@keyframes plate-in { from { transform: translateX(-60vw); } }
+@keyframes plate-out { to { transform: translateX(-60vw); opacity: 0; } }
+
+.intro-hint {
+  position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; align-items: center; gap: 10px; pointer-events: none;
+  font-family: var(--body); font-weight: 600; font-size: 14px; color: #fff; background: rgba(20, 16, 40, 0.6);
+  border: 1px solid rgba(255,255,255,0.25); padding: 8px 14px; border-radius: 99px; backdrop-filter: blur(6px); opacity: 0.55; transition: opacity 0.3s;
+}
+.intro-hint.ready { opacity: 1; animation: bob-y 2s ease-in-out infinite; }
+.ih-count { font-family: var(--display); color: var(--gold); letter-spacing: 1px; }

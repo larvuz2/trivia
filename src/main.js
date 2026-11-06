@@ -3,7 +3,8 @@ import { World } from './world.js';
 import { Character, defaultSticker, roundRect } from './characters.js';
 import { Confetti, Splash, makeCategoryProp } from './fx.js';
 import { CameraRig } from './camera.js';
-import { sfx, unlockAudio, startMusic, setAudioEnabled } from './audio.js';
+import { sfx, unlockAudio, startMusic, setAudioEnabled, setMusicState } from './audio.js';
+import { IntroDirector } from './intro.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL } from './storage.js';
 import * as G from './game.js';
 import { POINTS } from './data.js';
@@ -41,6 +42,8 @@ let props = [];
 let env = null; // Sea of Cortez scenery (Blender assets)
 let startLabel = null;
 let guests = []; // boys popped in next to the player (subject / ask the boys)
+let dj = null; // DJ (not a player) — spins at the booth from the cinematic onwards
+let director = null; // opening cinematic + character introductions
 
 // Team 0 is shown on the left. From the stern camera, screen-left is +X in stage space.
 const SIDE = [1, -1];
@@ -83,6 +86,17 @@ async function init() {
   setLoad(0.92, 'Turning on the dance floor…');
   buildCharacters();
   buildStartLabel();
+  director = new IntroDirector({
+    world,
+    env: () => env,
+    rig,
+    camera,
+    confetti,
+    characters: () => characters,
+    dj: () => dj,
+    sticker: (ch) => stickers[ch.data.id],
+    onFinished: () => { characters.forEach((c) => c.pop(true)); world.setParty(0.3); showTeams(); },
+  });
   await refreshStickers();
   applySettings();
   setLoad(1, 'All aboard!');
@@ -99,11 +113,32 @@ function buildCharacters() {
     return ch;
   });
   hangOut(true);
+  buildDJ();
   characters.forEach(async (ch) => {
     if (ch.data.model) {
       try { await ch.loadModel(await mediaURL(ch.data.model)); } catch (e) { console.warn('model load failed', e); }
     }
   });
+}
+
+function buildDJ() {
+  if (dj) world.stage.remove(dj.root);
+  dj = new Character({ id: 'dj', name: 'DJ Marea', role: 'boy', couple: -1, color: '#2a2f4a' }, 8);
+  // headphones
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.49, 0.045, 8, 24, Math.PI), new THREE.MeshStandardMaterial({ color: '#1b1d26', roughness: 0.4 }));
+  band.position.y = 0.05;
+  dj.head.add(band);
+  for (const sgn of [-1, 1]) {
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.12, 16), new THREE.MeshStandardMaterial({ color: '#ff4fb0', emissive: '#ff4fb0', emissiveIntensity: 0.6 }));
+    cup.rotation.z = Math.PI / 2;
+    cup.position.set(sgn * 0.48, 0.02, 0);
+    dj.head.add(cup);
+  }
+  world.stage.add(dj.root);
+  const d = spots().dj[0];
+  dj.place(d[0], d[1], Math.PI, 'dj');
+  dj.root.position.y = 0.42; // on a little riser so he shows over the decks
+  dj.pop(false, true);
 }
 
 async function refreshStickers() {
@@ -164,7 +199,7 @@ function hangOutPlan() {
   const face = Math.PI;
   const sofaFace = (dir) => Math.atan2(dir, 0);
   return [
-    [boyOf(0), s.dj[0][0], s.dj[0][1], face, 'dj'],
+    [boyOf(0), s.stools[2][0], s.stools[2][1], face + 0.3, 'sit', s.stools[2][2]],
     [girlOf(0), s.stools[0][0], s.stools[0][1], face - 0.2, 'sit', s.stools[0][2]],
     [girlOf(1), s.stools[1][0], s.stools[1][1], face + 0.15, 'sit', s.stools[1][2]],
     [boyOf(1), s.bar_lean[0][0], s.bar_lean[0][1], face - 0.6, 'idle'],
@@ -313,7 +348,7 @@ function toast(html, cls = '', dur = 1800) {
 }
 
 function persist() {
-  if (['menu', 'shuffle', 'results'].includes(game.phase)) return;
+  if (['menu', 'intro', 'shuffle', 'results'].includes(game.phase)) return;
   saveGame(game);
 }
 
@@ -350,14 +385,20 @@ function showMenu(intro = false) {
   world.setParty(0);
   world.setSpotlight(null);
   clearGuests();
-  showAll();
-  hangOut(intro);
-  characters.forEach((c) => c.showName(false));
+  // the menu is just the yacht and the sea: nobody's on deck yet
+  hangOut(true);
+  characters.forEach((c) => { c.showName(false); c.pop(false, true); });
+  dj?.pop(false, true);
+  world.setIntroMode(false);
+  world.setDoors(false);
+  if (world.startPedestal) world.startPedestal.visible = true;
+  if (world.startButton) world.startButton.visible = true;
   if (startLabel) startLabel.visible = true;
+  setMusicState('menu', 1.5);
   if (intro) {
     rig.setShift(0);
     rig.cut(sw(70, 40, -110), sw(0, 2, 0));
-    rig.shot(sw(0, 8.5, -19), sw(0, 1.8, -1), 4.5, 'inOut').then(() => { if (game.phase === 'menu') menuOrbit(); });
+    rig.shot(sw(0, 8.5, -19), sw(0, 1.8, -1), 4.5, 'inOut').then(() => { if (game.phase === 'menu' && menuActive) menuOrbit(); });
   } else menuOrbit();
   const canContinue = savedGame && ['board', 'question', 'final'].includes(savedGame.phase);
   const n = setScreen(`
@@ -398,8 +439,14 @@ function startGame() {
   rig.shake(0.3);
   clearGame();
   game = G.newGame();
+  game.phase = 'intro';
   if (startLabel) startLabel.visible = false;
-  showTeams();
+  ui.innerHTML = '';
+  // opening cinematic, then the gang is introduced one by one; the TV on deck starts the game
+  setTimeout(async () => {
+    await director.playCinematic();
+    await director.startIntros();
+  }, 450);
 }
 
 function continueGame() {
@@ -407,6 +454,7 @@ function continueGame() {
   if (startLabel) startLabel.visible = false;
   game = Object.assign(G.newGame(), savedGame);
   if (game.phase === 'question') G.cancelQuestion(game);
+  setMusicState('game');
   placeTeams({ instant: true });
   if (game.phase === 'final') { game.final = null; showFinalIntro(); } else startTurn();
 }
@@ -428,7 +476,12 @@ function openSetup() {
     onClose: () => showMenu(),
     previewCharacter: (id) => {
       const ch = characters.find((c) => c.data.id === id);
-      if (ch) ch.react(['cheer', 'dance', 'laugh', 'surprise', 'wave'][Math.floor(Math.random() * 5)], 2);
+      if (ch) {
+        ch.pop(true);
+        ch.react(['cheer', 'dance', 'laugh', 'surprise', 'wave'][Math.floor(Math.random() * 5)], 2);
+        clearTimeout(ch.previewT);
+        ch.previewT = setTimeout(() => { if (game.phase === 'menu') ch.pop(false); }, 3000);
+      }
     },
   });
 }
@@ -438,6 +491,9 @@ function openSetup() {
 // ------------------------------------------------------------------
 function showTeams() {
   game.phase = 'shuffle';
+  showAll();
+  dj?.pop(true);
+  setMusicState('game', 1.5);
   characters.forEach((c) => c.showName(true));
   rig.setShift(0);
   rig.shot(...shots.team(), 2.2);
@@ -537,9 +593,11 @@ async function startTurn(splashIntro = true) {
   clearGuests();
   if (G.remaining(game) === 0) return config.settings.finalSplash ? showFinalIntro() : showResults();
   world.setParty((25 - G.remaining(game)) / 25);
+  setMusicState('game', 1.2);
   const team = game.turn;
   const ch = activeGirl(team);
   showOnly([ch]);
+  dj?.pop(false);
   putOnSpot(ch);
   characters.forEach((c) => c.showName(false));
   if (!splashIntro) {
@@ -793,6 +851,7 @@ async function showQuestion() {
   const format = imgURL ? q.format || 'image' : 'text';
   const subject = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
   turnShot(player, 'board', 1.0);
+  setMusicState('question', 1.5);
   qScreen = setScreen(`
     ${playerPlate(player, cur.answering, 'answering')}
     <div class="trivia-panel question-mode">
@@ -992,6 +1051,8 @@ async function showFinalIntro() {
   clearGuests();
   placeTeams({ instant: true });
   showAll();
+  dj?.pop(true);
+  setMusicState('party', 1);
   rig.setShift(0);
   const water = sw(0, 0, -16);
   water.y = 0.3;
@@ -1046,6 +1107,7 @@ function showWagers() {
 
 async function showFinalQuestion() {
   game.final.stage = 'question';
+  setMusicState('question', 1.2);
   persist();
   const q = config.final;
   const imgURL = q.image ? await mediaURL(q.image) : null;
@@ -1112,6 +1174,8 @@ function showResults() {
   world.setSpotlight(null);
   clearGuests();
   showAll();
+  dj?.pop(true);
+  setMusicState('party', 0.8);
   rig.setShift(0);
   const w = G.winner(game);
   const winners = w >= 0 ? teamChars(w) : characters;
@@ -1168,11 +1232,22 @@ function hitStart(e) {
   return raycaster.intersectObjects(targets, false).length > 0;
 }
 canvas.addEventListener('pointermove', (e) => {
+  if (director?.active) {
+    const hover = director.state === 'final' && director.tv && (() => {
+      raycaster.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
+      return raycaster.intersectObject(director.tv, true).length > 0;
+    })();
+    canvas.style.cursor = hover || director.state === 'waiting' ? 'pointer' : 'default';
+    return;
+  }
   const h = hitStart(e);
   if (h !== world.startHover) { world.startHover = h; if (h) sfx('hover'); }
   canvas.style.cursor = h ? 'pointer' : 'default';
 });
-canvas.addEventListener('click', (e) => { if (hitStart(e)) startGame(); });
+canvas.addEventListener('click', (e) => {
+  if (director?.onClick(e)) return;
+  if (hitStart(e)) startGame();
+});
 
 // ------------------------------------------------------------------
 // Keyboard (host controls)
@@ -1180,6 +1255,10 @@ canvas.addEventListener('click', (e) => { if (hitStart(e)) startGame(); });
 window.addEventListener('keydown', (e) => {
   if (e.target.matches('input, textarea, select') || document.querySelector('.admin')) return;
   const k = e.key.toLowerCase();
+  if (director?.active) {
+    if (k === 'f') toggleFullscreen();
+    if (director.onKey(k)) { e.preventDefault(); return; }
+  }
   if (k === 'f') toggleFullscreen();
   if (k === '?' || (k === '/' && e.shiftKey)) toggleHelp();
   if (k === 'h') {
@@ -1203,10 +1282,13 @@ window.addEventListener('keydown', (e) => {
 // Main loop
 // ------------------------------------------------------------------
 const clock = new THREE.Clock();
+let maxDt = 0.05; // frame step cap (raised only by automated tests on very slow renderers)
 function loop() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const dt = Math.min(clock.getDelta(), maxDt);
   world.update(dt);
   env?.update(dt, world.party);
+  director?.update(dt);
+  dj?.update(dt);
   for (const c of characters) c.update(dt);
   if (startLabel?.visible) {
     startLabel.position.y = startLabel.userData.base + Math.sin(world.clock * 2.2) * 0.12;
@@ -1236,7 +1318,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame };
+window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, setMaxDt: (v) => { maxDt = v; } };
 
 loop();
 init();
