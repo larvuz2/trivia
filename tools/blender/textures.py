@@ -110,20 +110,20 @@ LILITA = os.path.join(FONTS, 'LilitaOne.ttf')
 PACIFICO = os.path.join(FONTS, 'Pacifico.ttf')
 
 
-def neon_sign(text='Compitas', sub='LA PAZ 2026', w=1024, h=384):
+def neon_sign(text='Compitas', sub='LA PAZ 2026', w=1024, h=300):
     """Pink script neon tube lettering with a cyan sub line, on a dark backing board."""
     img = Image.new('RGB', (w, h), (16, 10, 34))
     glow = Image.new('RGB', (w, h), (0, 0, 0))
     tubes = Image.new('RGB', (w, h), (0, 0, 0))
-    f1 = ImageFont.truetype(PACIFICO, 150)
-    f2 = ImageFont.truetype(LILITA, 52)
+    f1 = ImageFont.truetype(PACIFICO, 128)
+    f2 = ImageFont.truetype(LILITA, 36)
     for layer, col, wid in ((glow, (255, 60, 170), 10), (tubes, (255, 200, 235), 0)):
         d = ImageDraw.Draw(layer)
         tw = d.textlength(text, font=f1)
-        d.text(((w - tw) / 2, 18), text, font=f1, fill=col, stroke_width=wid, stroke_fill=col)
+        d.text(((w - tw) / 2, 4), text, font=f1, fill=col, stroke_width=wid, stroke_fill=col)
         sub_s = '  '.join(sub)  # letter-spaced
         f2w = d.textlength(sub_s, font=f2)
-        d.text(((w - f2w) / 2, 272), sub_s, font=f2, fill=(60, 230, 255) if layer is glow else (210, 250, 255), stroke_width=wid // 2, stroke_fill=(60, 230, 255))
+        d.text(((w - f2w) / 2, 228), sub_s, font=f2, fill=(60, 230, 255) if layer is glow else (210, 250, 255), stroke_width=wid // 2, stroke_fill=(60, 230, 255))
     d = ImageDraw.Draw(glow)
     d.rounded_rectangle((18, 18, w - 18, h - 18), 44, outline=(255, 205, 90), width=10)
     blur = glow.filter(ImageFilter.GaussianBlur(16))
@@ -141,7 +141,7 @@ def name_board(w=1024, h=256):
     img = Image.fromarray(base.astype(np.uint8))
     d = ImageDraw.Draw(img)
     f1 = ImageFont.truetype(LILITA, 150)
-    f2 = ImageFont.truetype(LILITA, 40)
+    f2 = ImageFont.truetype(LILITA, 36)
     t = 'COMPITAS'
     tw = d.textlength(t, font=f1)
     x = (w - tw) / 2
@@ -158,6 +158,50 @@ def name_board(w=1024, h=256):
     d.line(((w + sw) / 2 + 24, 202, w - 60, 202), fill=(214, 168, 76), width=4)
     d.text(((w - sw) / 2, 180), sub, font=f2, fill=(196, 146, 60))
     save(np.asarray(img), 'name.jpg', 92)
+
+
+def bottle_labels(cell=256):
+    """Label atlas (4 x 2): each cell is one label design wrapped around the front of a bottle."""
+    W, H = cell * 4, cell * 2
+    img = Image.new('RGB', (W, H), (240, 232, 214))
+    d = ImageDraw.Draw(img)
+    big = lambda size: ImageFont.truetype(LILITA, size)  # noqa: E731
+    script = lambda size: ImageFont.truetype(PACIFICO, size)  # noqa: E731
+    designs = [
+        # (bg, border, title, title_font, title_col, sub, sub_col, ornament)
+        ((246, 238, 220), (40, 120, 70), 'Tequila', script(52), (40, 120, 70), 'BLANCO · JALISCO', (150, 110, 50), 'agave'),
+        ((24, 22, 26), (212, 168, 76), 'MEZCAL', big(56), (212, 168, 76), 'ARTESANAL', (230, 220, 200), 'star'),
+        ((250, 248, 240), (196, 40, 50), 'RON', big(72), (196, 40, 50), 'AÑEJO 7', (40, 40, 40), 'stripe'),
+        ((214, 236, 246), (30, 90, 150), 'GIN', big(74), (30, 90, 150), 'BOTANICAL', (60, 120, 90), 'leaf'),
+        ((236, 238, 242), (120, 126, 140), 'VODKA', big(58), (60, 64, 80), 'PREMIUM', (120, 126, 140), 'line'),
+        ((30, 60, 44), (212, 168, 76), 'Whisky', script(52), (240, 220, 160), 'SINGLE MALT', (212, 168, 76), 'star'),
+        ((120, 22, 40), (230, 200, 140), 'VINO', big(64), (250, 236, 210), 'TINTO 2019', (230, 200, 140), 'line'),
+        ((255, 120, 170), (255, 255, 255), 'Compitas', script(46), (255, 255, 255), 'RESERVA 2026', (70, 20, 60), 'star'),
+    ]
+    for i, (bg, border, title, font, tcol, sub, scol, orn) in enumerate(designs):
+        x0, y0 = (i % 4) * cell, (i // 4) * cell
+        d.rectangle((x0, y0, x0 + cell, y0 + cell), fill=bg)
+        d.rounded_rectangle((x0 + 10, y0 + 10, x0 + cell - 10, y0 + cell - 10), 18, outline=border, width=6)
+        cx = x0 + cell / 2
+        if orn == 'agave':
+            for k in range(-3, 4):
+                d.polygon([(cx + k * 12, y0 + 92), (cx + k * 22, y0 + 36 + abs(k) * 8), (cx + k * 12 + 8, y0 + 92)], fill=(70, 150, 90))
+        elif orn == 'star':
+            pts = [(cx + (28 if j % 2 == 0 else 12) * np.sin(j * np.pi / 5), y0 + 62 - (28 if j % 2 == 0 else 12) * np.cos(j * np.pi / 5)) for j in range(10)]
+            d.polygon(pts, fill=border)
+        elif orn == 'stripe':
+            d.rectangle((x0 + 10, y0 + 40, x0 + cell - 10, y0 + 70), fill=border)
+        elif orn == 'leaf':
+            d.ellipse((cx - 40, y0 + 40, cx + 40, y0 + 84), fill=(90, 160, 110))
+            d.line((cx - 34, y0 + 62, cx + 34, y0 + 62), fill=(40, 100, 60), width=3)
+        else:
+            d.line((x0 + 40, y0 + 62, x0 + cell - 40, y0 + 62), fill=border, width=4)
+        tw = d.textlength(title, font=font)
+        d.text((cx - tw / 2, y0 + 96), title, font=font, fill=tcol)
+        f2 = big(22)
+        sw = d.textlength(sub, font=f2)
+        d.text((cx - sw / 2, y0 + 190), sub, font=f2, fill=scol)
+    save(np.asarray(img), 'labels.jpg', 90)
 
 
 def gelcoat_rgb(w, h, tint=(246, 243, 236)):
@@ -314,6 +358,7 @@ def build(out_dir=None):
     palm_leaf()
     bark()
     neon_sign()
+    bottle_labels()
     name_board()
     dance_floor()
     hot_tub()

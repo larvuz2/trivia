@@ -122,6 +122,29 @@ def materials():
     mat('grille', '#ffffff', rough=0.6, metal=0.3, tex='grille.jpg')
     mat('leaf', '#ffffff', rough=0.65, tex='leaf.jpg').use_backface_culling = False
     mat('bark', '#ffffff', rough=0.85, tex='bark.jpg', normal='bark_n.jpg')
+    # bottle glass (tinted, see-through), liquids and closures
+    mat('bglass_clear', '#eaf7ff', rough=0.04, metal=0.1, alpha=0.32)
+    mat('bglass_green', '#1f6b3c', rough=0.05, metal=0.1, alpha=0.78)
+    mat('bglass_dark', '#17301f', rough=0.05, metal=0.1, alpha=0.88)
+    mat('bglass_blue', '#7cc4ec', rough=0.05, metal=0.1, alpha=0.45)
+    mat('bglass_frost', '#eef3f6', rough=0.55, alpha=0.62)
+    mat('bglass_pink', '#ffb3d1', rough=0.05, metal=0.1, alpha=0.45)
+    mat('liq_clear', '#e7f2f2', rough=0.15)
+    mat('liq_amber', '#c1691d', rough=0.12, emit='#5a2a05', emit_strength=0.4)
+    mat('liq_gold', '#e8b545', rough=0.12)
+    mat('liq_dark', '#6e3410', rough=0.12)
+    mat('liq_red', '#6e0f1f', rough=0.15)
+    mat('liq_purple', '#6d1f5e', rough=0.12)
+    mat('liq_orange', '#ff6a1a', rough=0.12, emit='#ff4a00', emit_strength=0.3)
+    mat('liq_pink', '#ff5c9a', rough=0.12, emit='#ff2a77', emit_strength=0.3)
+    mat('labels', '#ffffff', rough=0.6, tex='labels.jpg')
+    mat('cork', '#c9a06a', rough=0.9)
+    mat('cap_black', '#1b1b20', rough=0.35)
+    mat('cap_chrome', '#e4e7ec', metal=1.0, rough=0.18)
+    mat('cap_gold', '#e2b450', metal=1.0, rough=0.22)
+    mat('foil_red', '#9e1b2c', metal=0.6, rough=0.3)
+    mat('foil_gold', '#d9a93f', metal=1.0, rough=0.25)
+    mat('wax', '#d2402a', rough=0.35, coat=0.6)
     mat('teak', '#ffffff', rough=0.72, tex='teak.jpg', normal='teak_n.jpg')
     mat('walnut', '#ffffff', rough=0.45, tex='walnut.jpg')
     mat('marble', '#ffffff', rough=0.18, tex='marble.jpg')
@@ -679,16 +702,149 @@ def cocktail(c, liquid):
     torus((x + 0.09, y + 0.35, z), 0.05, 0.018, 'lime', axis='z')
 
 
-def bottles(x0, x1, y, z):
-    kinds = ['bottle_green', 'bottle_amber', 'bottle_blue', 'bottle_amber', 'bottle_green', 'chrome']
-    i = 0
+# ---------------------------------------------------------------- bottles (lathe-turned)
+def lathe(c, profile, m, segs=18, rot=0.0, arc=None, uv_cell=None, cap_bottom=True, cap_top=True, smooth_angle=60, bevel=0.0, keep=None):
+    """Spin a profile [(radius, height), ...] (bottom -> top, heights relative to c) around the vertical axis.
+    arc=(a0, a1) makes a partial band (angle 0 faces the bar, i.e. game -z); uv_cell=(u0, v0, u1, v1) maps it into an atlas."""
+    x0, y0, z0 = c
+    full = arc is None
+    a0, a1 = (0.0, math.tau) if full else arc
+    cols = segs if full else segs + 1
+    verts, faces, uvs = [], [], []
+    for j, (r, h) in enumerate(profile):
+        for i in range(cols):
+            a = a0 + (a1 - a0) * i / segs + rot
+            verts.append((x0 + r * math.sin(a), y0 + h, z0 - r * math.cos(a)))
+            if uv_cell:
+                u0, v0, u1, v1 = uv_cell
+                uvs.append((u1 - (u1 - u0) * i / segs, v0 + (v1 - v0) * j / (len(profile) - 1)))
+            else:
+                uvs.append((i / segs, j / (len(profile) - 1)))
+    for j in range(len(profile) - 1):
+        for i in range(segs):
+            a = j * cols + i
+            b = j * cols + (i + 1) % cols
+            faces.append((a, b, b + cols, a + cols))
+    if full and cap_bottom and profile[0][0] > 0:
+        verts.append((x0, y0 + profile[0][1], z0)); uvs.append((0.5, 0.5))
+        cidx = len(verts) - 1
+        faces += [(cidx, (i + 1) % cols, i) for i in range(segs)]
+    if full and cap_top and profile[-1][0] > 0:
+        verts.append((x0, y0 + profile[-1][1], z0)); uvs.append((0.5, 0.5))
+        cidx = len(verts) - 1
+        base = (len(profile) - 1) * cols
+        faces += [(cidx, base + i, base + (i + 1) % cols) for i in range(segs)]
+    o = poly_mesh('lathe', verts, faces, m, uvs=uvs, smooth_angle=smooth_angle)
+    PARTS.remove(o)
+    fix_normals(o)
+    return _finish(o, m, bevel=bevel, seg=2, smooth_angle=smooth_angle, keep=keep)
+
+
+def _curve(points, n=4):
+    """Smooth a coarse profile with Catmull-Rom so bottles get soft shoulders."""
+    out = []
+    pts = [points[0]] + points + [points[-1]]
+    for k in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[k - 1], pts[k], pts[k + 1], pts[k + 2]
+        for t in [i / n for i in range(n)]:
+            t2, t3 = t * t, t * t * t
+            out.append(tuple(0.5 * ((2 * p1[d]) + (-p0[d] + p2[d]) * t + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * t2 + (-p0[d] + 3 * p1[d] - 3 * p2[d] + p3[d]) * t3) for d in range(2)))
+    out.append(points[-1])
+    return out
+
+
+# label atlas cells (4 x 2): tequila, mezcal, ron, gin / vodka, whisky, vino, compitas
+def _cell(i):
+    col, row = i % 4, i // 4
+    return (col / 4 + 0.006, 1 - (row + 1) / 2 + 0.01, (col + 1) / 4 - 0.006, 1 - row / 2 - 0.01)
+
+
+# name: (profile [(r, h)], glass, liquid, fill, closure, label cell, label band (h0, h1), square?)
+BOTTLES = {
+    'wine':      ([(0.058, 0), (0.06, 0.02), (0.06, 0.22), (0.05, 0.27), (0.022, 0.32), (0.019, 0.4)], 'bglass_green', 'liq_red', 0.7, 'foil_red', 6, (0.05, 0.17), False),
+    'champagne': ([(0.064, 0), (0.066, 0.02), (0.066, 0.2), (0.055, 0.26), (0.025, 0.33), (0.022, 0.42)], 'bglass_dark', 'liq_gold', 0.75, 'foil_gold', 7, (0.05, 0.16), False),
+    'tequila':   ([(0.07, 0), (0.078, 0.03), (0.078, 0.14), (0.062, 0.19), (0.028, 0.21), (0.026, 0.25)], 'bglass_clear', 'liq_clear', 0.8, 'cork_big', 0, (0.03, 0.15), False),
+    'anejo':     ([(0.05, 0), (0.053, 0.02), (0.053, 0.27), (0.04, 0.31), (0.02, 0.33), (0.02, 0.38)], 'bglass_clear', 'liq_amber', 0.85, 'cork', 0, (0.06, 0.2), False),
+    'mezcal':    ([(0.06, 0), (0.064, 0.02), (0.064, 0.16), (0.05, 0.2), (0.024, 0.23), (0.023, 0.29)], 'bglass_clear', 'liq_clear', 0.75, 'wax', 1, (0.04, 0.15), False),
+    'rum':       ([(0.05, 0), (0.075, 0.05), (0.085, 0.11), (0.07, 0.18), (0.03, 0.22), (0.024, 0.28)], 'bglass_clear', 'liq_dark', 0.7, 'cap_black', 2, (0.05, 0.15), False),
+    'gin':       ([(0.07, 0), (0.074, 0.02), (0.074, 0.22), (0.06, 0.26), (0.026, 0.28), (0.025, 0.33)], 'bglass_blue', 'liq_clear', 0.8, 'cap_chrome', 3, (0.05, 0.18), True),
+    'vodka':     ([(0.046, 0), (0.048, 0.02), (0.05, 0.3), (0.035, 0.34), (0.018, 0.36), (0.018, 0.41)], 'bglass_frost', 'liq_clear', 0.85, 'cap_chrome', 4, (0.07, 0.22), False),
+    'whisky':    ([(0.075, 0), (0.08, 0.02), (0.08, 0.17), (0.07, 0.2), (0.03, 0.22), (0.028, 0.25)], 'bglass_clear', 'liq_amber', 0.7, 'stopper', 5, (0.04, 0.14), True),
+    'liqueur':   ([(0.03, 0), (0.07, 0.03), (0.09, 0.09), (0.07, 0.16), (0.025, 0.19), (0.02, 0.25)], 'bglass_clear', 'liq_purple', 0.65, 'cap_gold', 7, (0.05, 0.12), False),
+    'aperitivo': ([(0.055, 0), (0.058, 0.02), (0.058, 0.2), (0.045, 0.25), (0.02, 0.29), (0.019, 0.34)], 'bglass_clear', 'liq_orange', 0.8, 'cap_black', 2, (0.05, 0.16), False),
+    'compitas':  ([(0.06, 0), (0.066, 0.03), (0.07, 0.16), (0.055, 0.22), (0.026, 0.25), (0.024, 0.3)], 'bglass_pink', 'liq_pink', 0.75, 'cap_gold', 7, (0.05, 0.16), False),
+}
+
+
+def bottle(kind, c, scale=1.0, turn=0.0):
+    prof, glass, liquid, fill, closure, cell, band, square = BOTTLES[kind]
+    prof = [(r * scale, h * scale) for r, h in prof]
+    segs, rot, sm = (4, math.pi / 4 + turn, 25) if square else (20, turn, 70)
+    shape = prof if square else _curve(prof)
+    if square:
+        k = 1 / math.cos(math.pi / 4)  # square corners reach the radius
+        shape = [(r * k, h) for r, h in prof]
+    lathe(c, shape, glass, segs=segs, rot=rot, smooth_angle=sm, bevel=0.012 * scale if square else 0.0)
+    # liquid: the body below the shoulder, filled to `fill`
+    body_top = max(h for r, h in prof if r >= prof[2][0] * 0.95)
+    liq = [(r * 0.86, h + 0.004) for r, h in shape if h <= body_top * fill] or [(shape[0][0] * 0.86, 0.004)]
+    liq.append((liq[-1][0], body_top * fill))
+    lathe(c, liq, liquid, segs=segs, rot=rot, smooth_angle=sm)
+    # label wrapped around the front
+    h0, h1 = band[0] * scale, band[1] * scale
+    def r_at(h):
+        for (ra, ha), (rb, hb) in zip(shape, shape[1:]):
+            if ha <= h <= hb:
+                return ra + (rb - ra) * (h - ha) / max(1e-6, hb - ha)
+        return shape[-1][0]
+    lab = [(r_at(h0 + (h1 - h0) * t / 4) * 1.012, h0 + (h1 - h0) * t / 4) for t in range(5)]
+    if square:
+        x, y, z = c
+        hw = lab[0][0] * math.cos(math.pi / 4) * 0.96
+        zf = z - hw / 1.0 - 0.004
+        u0, v0, u1, v1 = _cell(cell)
+        poly_mesh('label', [(x + hw, y + h0, zf), (x - hw, y + h0, zf), (x - hw, y + h1, zf), (x + hw, y + h1, zf)], [(0, 1, 2, 3)], 'labels', uvs=[(u0, v0), (u1, v0), (u1, v1), (u0, v1)])
+    else:
+        lathe(c, lab, 'labels', segs=10, arc=(-1.05, 1.05), uv_cell=_cell(cell), smooth_angle=80)
+    # closure
+    x, y, z = c
+    top = prof[-1][1]
+    nr = prof[-1][0]
+    if closure == 'cork':
+        cyl((x, y + top + 0.025 * scale, z), nr * 1.25, 0.05 * scale, 'cork', verts=14)
+        cyl((x, y + top + 0.055 * scale, z), nr * 1.6, 0.02 * scale, 'cap_black', verts=14)
+    elif closure == 'cork_big':
+        cyl((x, y + top + 0.035 * scale, z), nr * 1.5, 0.07 * scale, 'cork', verts=16, bevel=0.006)
+    elif closure in ('foil_red', 'foil_gold'):
+        cyl((x, y + top - 0.04 * scale, z), nr * 1.12, 0.09 * scale, closure, verts=14)
+    elif closure == 'wax':
+        lathe((x, y + top - 0.05 * scale, z), [(nr * 1.15, 0), (nr * 1.25, 0.03 * scale), (nr * 1.15, 0.06 * scale), (nr * 0.8, 0.075 * scale)], 'wax', segs=14, smooth_angle=80)
+    elif closure == 'stopper':
+        cyl((x, y + top + 0.01 * scale, z), nr * 1.1, 0.02 * scale, 'bglass_clear', verts=14)
+        sphere((x, y + top + 0.05 * scale, z), 0.034 * scale, 'bglass_clear', seg=14, rings=8)
+    else:
+        cyl((x, y + top + 0.018 * scale, z), nr * 1.18, 0.036 * scale, closure, verts=14, bevel=0.004)
+
+
+def bottles(x0, x1, y, z, max_h=0.42, seed=0, kinds=None):
+    """A lively row of different bottles that fits under max_h."""
+    import random as _r
+    rnd = _r.Random(seed)
+    kinds = kinds or list(BOTTLES.keys())
+    order = kinds[:]
+    rnd.shuffle(order)
     x = x0
-    while x < x1:
-        k = kinds[i % len(kinds)]
-        h = 0.45 + (i % 3) * 0.08
-        cyl((x, y + h / 2, z), 0.08, h, k, verts=12)
-        cyl((x, y + h + 0.08, z), 0.03, 0.16, k, verts=8)
-        x += 0.24
+    i = 0
+    while True:
+        kind = order[i % len(order)]
+        prof = BOTTLES[kind][0]
+        h = prof[-1][1] + 0.07
+        sc = min(1.15, max_h / h) * rnd.uniform(0.92, 1.0)
+        rmax = max(r for r, _ in prof) * sc
+        if x + rmax * 2 > x1:
+            break
+        bottle(kind, (x + rmax, y, z + rnd.uniform(-0.03, 0.03)), sc, turn=rnd.uniform(-0.25, 0.25))
+        x += rmax * 2 + rnd.uniform(0.02, 0.06)
         i += 1
 
 
@@ -806,20 +962,28 @@ def build_party_deck():
     cyl(W(bx0 - 0.1, 1.13, bz - 0.05), 0.45, 0.08, 'marble', verts=24)
     for i, x in enumerate((2.4, 3.6, 4.8)):
         stool(W(x, 0, bz - 0.9))
-        cocktail(W(x + 0.1, 1.17, bz - 0.2), ['cushion_coral', 'bottle_blue', 'cushion_yellow'][i])
+        cocktail(W(x + 0.1, 1.17, bz - 0.2), ['liq_orange', 'liq_pink', 'liq_gold'][i])
     SPOTS['stools'] = [[2.4, bz - 0.9, 0.95], [3.6, bz - 0.9, 0.95], [4.8, bz - 0.9, 0.95]]
     SPOTS['bar_lean'] = [[5.6, bz - 0.95]]
     # back bar with shelves, bottles and the neon sign on the salon wall
     wz = 7.85
     box(W((bx0 + bx1) / 2, 0.5, wz), (bx1 - bx0, 1.0, 0.5), 'fluted', bevel=0.03)
     box(W((bx0 + bx1) / 2, 1.02, wz), (bx1 - bx0, 0.05, 0.55), 'marble', uv=0.7)
-    for k, y in enumerate((1.45, 1.95)):
-        box(W((bx0 + bx1) / 2, y, wz + 0.05), (bx1 - bx0, 0.05, 0.35), 'glass_clear', bevel=0.01)
-        bottles(W(bx0 + 0.2, 0, 0)[0], W(bx1 - 0.2, 0, 0)[0], S(0, y + 0.03, 0)[1], S(0, 0, wz + 0.05)[2])
-    bottles(W(bx0 + 0.2, 0, 0)[0], W(bx1 - 0.2, 0, 0)[0], S(0, 1.05, 0)[1], S(0, 0, wz - 0.1)[2])
+    shelf_y = 1.5
+    box(W((bx0 + bx1) / 2, shelf_y, wz + 0.05), (bx1 - bx0, 0.05, 0.35), 'glass_clear', bevel=0.01)
+    box(W((bx0 + bx1) / 2, shelf_y - 0.035, wz + 0.22), (bx1 - bx0, 0.02, 0.02), 'led_pink', bevel=0.005)
+    for xs in (bx0 + 0.05, bx1 - 0.05):  # shelf brackets
+        box(W(xs, (1.05 + shelf_y) / 2 + 0.25, wz + 0.05), (0.04, 0.9, 0.3), 'gold', bevel=0.01)
+    lo, hi = W(bx0 + 0.12, 0, 0)[0], W(bx1 - 0.12, 0, 0)[0]
+    bottles(lo, hi, S(0, 1.045, 0)[1], S(0, 0, wz - 0.08)[2], max_h=0.4, seed=3)
+    bottles(lo, hi, S(0, shelf_y + 0.025, 0)[1], S(0, 0, wz + 0.05)[2], max_h=0.44, seed=7)
+    # neon sign above the shelf (fits under the flybridge overhang)
     nz = S(0, 0, 8.0)[2] - 0.08
-    nx0, nx1 = S(bx0 + 0.2, 0, 0)[0], S(bx1 - 0.2, 0, 0)[0]
-    quad([(nx1, DECK + 2.0, nz), (nx0, DECK + 2.0, nz), (nx0, DECK + 2.0 + 1.45, nz), (nx1, DECK + 2.0 + 1.45, nz)], 'neon')
+    ncx = S((bx0 + bx1) / 2, 0, 0)[0]
+    nh = 0.6
+    nw = nh * 1024 / 300
+    ny0 = DECK + 2.0
+    quad([(ncx + nw / 2, ny0, nz), (ncx - nw / 2, ny0, nz), (ncx - nw / 2, ny0 + nh, nz), (ncx + nw / 2, ny0 + nh, nz)], 'neon')
 
     # --- DJ booth (starboard, under the overhang) ---
     dx0, dx1, dz = -5.6, -2.0, 4.8
@@ -909,7 +1073,7 @@ def build_flybridge():
     box((-2.0, y + 0.08, -3.98), (4.0, 0.05, 0.04), 'led_cyan', bevel=0.01)
     for x in (-3.4, -2.0, -0.6):
         stool((x, y, -4.6))
-    bottles(-3.6, -0.6, y + 1.17, -3.35)
+    bottles(-3.6, -0.6, y + 1.17, -3.35, max_h=0.42, seed=11, kinds=['wine', 'champagne', 'tequila', 'rum', 'aperitivo', 'compitas', 'liqueur'])
     # lounge + table under the hardtop
     sofa((3.7, y, -2.0), 4.0, 1.1, '-x', accent=('cushion_yellow', 'cushion_coral'))
     cyl((2.3, y + 0.3, -2.0), 0.7, 0.6, 'wood', verts=28, bevel=0.03)
