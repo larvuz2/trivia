@@ -1,6 +1,6 @@
-# ⛵ Yacht Club Trivia
+# ⛵ Compitas Trivia
 
-**La Paz · The Couples Edition** — a cozy 3D party-trivia game on a luxury yacht in La Paz, Baja California.
+**La Paz 2026** — a cozy 3D party-trivia game on a luxury yacht in La Paz, Baja California.
 The four guys have been friends forever. Now the girls have to prove how well they know them.
 
 Jeopardy!-style board + Jackbox-style personality + Overcooked-style miniature 3D, all in the browser (Three.js).
@@ -107,9 +107,9 @@ The host bar at the bottom also has all of these as buttons, plus **Adjust score
 
 - Lofted hull with a raked bow, navy boot band, coral pinstripe, chrome rub rail, dark hull windows and portholes,
   underwater LEDs, fenders, anchor.
-- Swim platform with twin stairs, boarding ladder, paddle boards, the YACHT CLUB · LA PAZ name board and a Mexican ensign.
+- Swim platform with twin stairs, boarding ladder, paddle boards, the COMPITAS · LA PAZ 2026 name board and a Mexican ensign.
 - **Party deck:** LED dance floor with the START pedestal, a walnut-and-marble bar with stools, cocktails, back bar
-  with bottles and a pink neon sign, a DJ booth with decks and speaker stacks, a disco ball, a stern lounge with
+  with bottles and a pink "COMPITAS" neon sign, a DJ booth with decks and speaker stacks, a disco ball, a stern lounge with
   champagne and fruit, side lounges, palms, life rings, string lights and bunting.
 - **Flybridge:** glowing hot tub, striped sun pads, a second bar, lounge, helm, hardtop with radar arch and domes.
 - **Bow:** big sun pads with towels, bean bags, windlass.

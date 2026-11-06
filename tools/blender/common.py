@@ -1,4 +1,4 @@
-"""Shared helpers for the Yacht Club Trivia Blender asset scripts.
+"""Shared helpers for the Compitas Trivia Blender asset scripts.
 
 Coordinates: we think in *game* space (three.js, Y-up: x right, y up, z toward the bow).
 Blender is Z-up, and the glTF exporter maps Blender (x, y, z) -> glTF (x, z, -y),

@@ -408,8 +408,8 @@ function showMenu(intro = false) {
     <div class="menu">
       <div class="logo">
         <div class="logo-top">⚓ WELCOME ABOARD ⚓</div>
-        <h1><span>YACHT CLUB</span><span class="logo-trivia">TRIVIA</span></h1>
-        <div class="logo-sub">La Paz · The Couples Edition</div>
+        <h1><span>COMPITAS</span><span class="logo-trivia">TRIVIA</span></h1>
+        <div class="logo-sub">La Paz 2026</div>
       </div>
       <div class="start-hint"><span class="sh-dot"></span> Click the glowing <b>START</b> button on the dance floor</div>
       <div class="menu-corner">

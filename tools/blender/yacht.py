@@ -1,4 +1,4 @@
-"""YACHT CLUB — the party yacht, modelled from scratch.
+"""COMPITAS — the party yacht, modelled from scratch.
 
 Everything is written in GAME space (three.js: x = port(+)/starboard(-), y = up, z = bow(+)/stern(-)).
 G() converts to Blender space. Units: 1 ≈ 0.9 m (characters are ~2 units tall).

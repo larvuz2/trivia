@@ -105,7 +105,7 @@ def stripes(name, c1, c2, n=8, size=256):
     save(col, name)
 
 
-def neon_sign(text='YACHT CLUB', sub='LA PAZ · BAJA', w=1024, h=384):
+def neon_sign(text='COMPITAS', sub='LA PAZ 2026', w=1024, h=384):
     img = Image.new('RGB', (w, h), (18, 12, 40))
     glow = Image.new('RGB', (w, h), (0, 0, 0))
     d = ImageDraw.Draw(glow)
@@ -129,10 +129,10 @@ def name_board(w=1024, h=256):
     d = ImageDraw.Draw(img)
     f1 = ImageFont.truetype(FONT_BOLD, 120)
     f2 = ImageFont.truetype(FONT_BOLD, 48)
-    t = 'YACHT CLUB'
+    t = 'COMPITAS'
     tw = d.textlength(t, font=f1)
     d.text(((w - tw) / 2, 20), t, font=f1, fill=(35, 48, 94))
-    s = 'LA PAZ  ·  B.C.S.'
+    s = 'LA PAZ  2026'
     sw = d.textlength(s, font=f2)
     d.text(((w - sw) / 2, 168), s, font=f2, fill=(200, 150, 70))
     save(np.asarray(img), 'name.jpg', 92)

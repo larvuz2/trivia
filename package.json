@@ -1,7 +1,7 @@
 {
   "name": "yacht-club-trivia",
   "version": "1.0.0",
-  "description": "Yacht Club Trivia — a cozy 3D party trivia game set on a yacht in La Paz",
+  "description": "Compitas Trivia — a cozy 3D party trivia game set on a yacht in La Paz",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",

@@ -137,7 +137,7 @@ export class IntroDirector {
       g.fillText(text, w / 2, y);
     };
     if (this.tvMode === 'logo') {
-      big('YACHT CLUB', 220, 120);
+      big('COMPITAS', 220, 120);
       big('TRIVIA', 340, 130, '#ffd34d');
     } else if (this.tvMode === 'welcome') {
       big('WELCOME ABOARD', 200, 92, '#9ff0ff');
@@ -227,7 +227,7 @@ export class IntroDirector {
     this.fade(0, 220);
     this.confetti.burst(this.sw(-2.0, 2.4, 4.0), 160, { up: 6 });
     this.confetti.burst(this.sw(2.0, 2.4, 4.0), 160, { up: 6 });
-    setTimeout(() => this.mode === 'cinematic' && this.setCaption('TONIGHT ON DECK', 'the Yacht Club party'), 700);
+    setTimeout(() => this.mode === 'cinematic' && this.setCaption('COMPITAS TRIVIA', 'La Paz 2026'), 700);
     if (await this.hold(4300)) return this.endCinematic();
     this.setCaption('');
     await this.fade(1, 800);

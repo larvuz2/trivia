@@ -284,7 +284,7 @@ export async function exportConfig(cfg) {
 
 export async function importConfig(text) {
   const parsed = JSON.parse(text);
-  if (!parsed?.questions || !parsed?.characters) throw new Error('Not a Yacht Club Trivia file');
+  if (!parsed?.questions || !parsed?.characters) throw new Error('Not a Compitas Trivia file');
   parsed.version = CONFIG_VERSION;
   return mapRefs(parsed, async (ref) => {
     if (!ref?.startsWith('data:')) return ref;
