@@ -23,7 +23,12 @@ export class CameraRig {
     this.fov = camera.fov;
     this.fovTarget = camera.fov;
     this.sway = 1;
+    this.shift = 0;
+    this.shiftTarget = 0;
   }
+
+  /** Slide the framing sideways: 0 = centred, 0.33 = look target sits in the left third of the screen. */
+  setShift(v) { this.shiftTarget = v; }
 
   /** Move to a shot. Returns a promise that resolves when the move ends. */
   shot(pos, look, dur = 1.6, easing = 'inOut', fov = null) {
@@ -96,6 +101,15 @@ export class CameraRig {
       this.shakeAmt *= Math.pow(0.02, dt);
     }
     cam.lookAt(this.look);
+    this.shift += (this.shiftTarget - this.shift) * Math.min(1, dt * 3.5);
+    if (Math.abs(this.shift) > 0.002) {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      cam.setViewOffset(w, h, this.shift * w, 0, w, h);
+    } else if (cam.view?.enabled) {
+      this.shift = 0;
+      cam.clearViewOffset();
+    }
     if (Math.abs(cam.fov - this.fovTarget) > 0.01) {
       cam.fov += (this.fovTarget - cam.fov) * Math.min(1, dt * 3);
       cam.updateProjectionMatrix();

@@ -1,6 +1,7 @@
 // The continuous 3D world: sky, Sea of Cortez water, Baja scenery, the yacht, lights and props.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // Time of day keyframes: clear Baja afternoon -> golden hour -> party night.
 // The game drives this with `party` (0 at the start of the board, 1 when it's cleared).
@@ -448,241 +449,123 @@ export class World {
     }
   }
 
-  // ---------------- The yacht (Tripo-generated) ----------------
+  // ---------------- The party yacht (built in Blender: tools/blender/yacht.py) ----------------
   async loadYacht(url, onProgress) {
     const loader = new GLTFLoader();
-    const gltf = await new Promise((resolve, reject) => loader.load(url, resolve, (e) => onProgress?.(e.total ? e.loaded / e.total : 0), reject));
+    const [gltf, layout] = await Promise.all([
+      new Promise((resolve, reject) => loader.load(url, resolve, (e) => onProgress?.(e.total ? e.loaded / e.total : 0), reject)),
+      fetch(url.replace(/yacht\.glb$/, 'yacht-layout.json')).then((r) => r.json()),
+    ]);
+    this.layout = layout;
     const model = gltf.scene;
-    // Clip the tall clutter (lamp posts, flower pots) that the generated model put on the
-    // aft deck, so the game-show set reads clearly. Only geometry inside BOTH half-spaces
-    // (above head height AND behind the board line) is removed.
-    this.clipAbove = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
-    this.clipBehind = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    // chrome, glass and glossy gelcoat need something to reflect
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.yachtMats = {};
     model.traverse((o) => {
-      if (o.isMesh) {
-        o.material.clippingPlanes = [this.clipAbove, this.clipBehind];
-        o.material.clipIntersection = true;
-        o.material.clipShadows = true;
-        o.castShadow = true;
-        o.receiveShadow = true;
-        if (o.material) {
-          o.material.envMapIntensity = 0.6;
-          if ('roughness' in o.material) o.material.roughness = Math.max(o.material.roughness ?? 0.6, 0.55);
-          if ('metalness' in o.material) o.material.metalness = Math.min(o.material.metalness ?? 0, 0.15);
-        }
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      o.receiveShadow = true;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        m.envMap = this.envMap;
+        m.envMapIntensity = m.metalness > 0.5 ? 1.0 : 0.55;
+        this.yachtMats[m.name] = m;
+        if (m.transparent) o.castShadow = false;
       }
     });
-    // Normalize: long axis = Z, length = 56 units, stern toward -Z.
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const L = 56;
-    const s = L / size.z;
-    model.scale.setScalar(s);
-    box.setFromObject(model);
-    const c = box.getCenter(new THREE.Vector3());
-    model.position.x -= c.x;
-    model.position.z -= c.z;
-    model.position.y -= box.min.y;
-    model.position.y -= 3.4; // sit the hull in the water
     this.yacht.add(model);
     this.yachtModel = model;
-    model.updateMatrixWorld(true);
+    this.deckY = layout.deck;
+    this.stage.position.set(...layout.stage);
 
-    // Find the aft deck floor by raycasting down (ignoring the canopy & furniture).
-    const box2 = new THREE.Box3().setFromObject(model);
-    const H = box2.max.y - box2.min.y;
-    const meshes = [];
-    model.traverse((o) => o.isMesh && meshes.push(o));
-    const rc = new THREE.Raycaster();
-    const deckAt = (x, z) => {
-      rc.set(new THREE.Vector3(x, box2.max.y + 5, z), new THREE.Vector3(0, -1, 0));
-      const hits = rc.intersectObjects(meshes, false).filter((h) => h.point.y < box2.min.y + H * 0.53);
-      return hits.length ? hits[0].point.y : null;
-    };
-    const sternZ = box2.min.z;
-    const samples = [];
-    for (let i = 0; i < 9; i++) {
-      const y = deckAt((i - 4) * 0.4, sternZ + L * 0.16);
-      if (y !== null) samples.push(y);
+    // named interactive / animated pieces
+    const get = (n) => model.getObjectByName(n);
+    this.startPedestal = get('start_pedestal');
+    this.startButton = get('start_button');
+    this.discoBall = get('disco_ball');
+    this.tubWater = get('hot_tub_water');
+    this.floats = ['flamingo', 'donut'].map(get).filter(Boolean);
+    // floats live on the water, not on the (bobbing) yacht
+    model.updateMatrixWorld(true);
+    this.floats = this.floats.map((f) => {
+      // pivot at the float's centre so it can bob and spin in place
+      const c = new THREE.Box3().setFromObject(f).getCenter(new THREE.Vector3());
+      const pivot = new THREE.Group();
+      pivot.position.copy(c);
+      this.scene.add(pivot);
+      pivot.updateMatrixWorld(true);
+      pivot.attach(f);
+      pivot.userData.base = c.clone();
+      pivot.userData.phase = Math.random() * 6;
+      f.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+      return pivot;
+    });
+    const dance = this.yachtMats.dance;
+    if (dance?.map) {
+      for (const t of [dance.map, dance.emissiveMap]) {
+        if (!t) continue;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.needsUpdate = true;
+      }
     }
-    samples.sort((a, b) => a - b);
-    const deckY = samples.length ? samples[Math.floor(samples.length / 2)] : box2.min.y + H * 0.49;
-    this.deckY = deckY;
-    this.deckAt = deckAt;
-    this.stage.position.set(0, deckY, sternZ + L * 0.17);
-    this.stageBounds = { halfWidth: 5.2, back: -4.5, front: 4.8 };
-    this.buildDeckProps();
+    if (this.startButton) {
+      this.startButton.material = this.startButton.material.clone();
+      this.startButton.userData.baseScale = this.startButton.scale.clone();
+    }
+    this.buildPartyLights();
     return model;
   }
 
-  /** A simple fallback yacht if the GLB can't be loaded. */
-  buildFallbackYacht() {
-    const hull = new THREE.Mesh(
-      new THREE.CapsuleGeometry(8, 36, 6, 16),
-      new THREE.MeshStandardMaterial({ color: '#f3e3cc', roughness: 0.7 }),
-    );
-    hull.rotation.x = Math.PI / 2;
-    hull.scale.set(1, 1, 0.55);
-    hull.position.y = 1.5;
-    hull.castShadow = hull.receiveShadow = true;
-    this.yacht.add(hull);
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(14, 0.4, 44), new THREE.MeshStandardMaterial({ color: '#d99a5b' }));
-    deck.position.y = 5.6;
-    deck.receiveShadow = true;
-    this.yacht.add(deck);
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(11, 5, 18), new THREE.MeshStandardMaterial({ color: '#f6ead8' }));
-    cabin.position.set(0, 8.3, 4);
-    cabin.castShadow = true;
-    this.yacht.add(cabin);
-    this.deckY = 5.8;
-    this.deckAt = () => this.deckY;
-    this.stage.position.set(0, this.deckY, -15);
-    this.stageBounds = { halfWidth: 5.2, back: -4.5, front: 4.8 };
-    this.buildDeckProps();
-  }
-
-  buildDeckProps() {
-    const st = this.stage;
-    // Party string lights across the aft deck
-    this.bulbs = [];
-    const posts = [[-7.3, -1.6], [7.3, -1.6], [7.3, 4.6], [-7.3, 4.6]];
-    const postMat = new THREE.MeshStandardMaterial({ color: '#c98b4f', roughness: 0.8 });
-    const postH = 5.2;
-    for (const [x, z] of posts) {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, postH, 8), postMat);
-      p.position.set(x, postH / 2, z);
-      p.castShadow = true;
-      st.add(p);
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), postMat);
-      cap.position.set(x, postH, z);
-      st.add(cap);
-    }
-    const bulbColors = ['#ffd27a', '#ffb3c7', '#9ff0e6', '#ffe9a8', '#ffc08a'];
-    const wire = (a, b, n, sag) => {
-      const pts = [];
-      for (let i = 0; i <= 24; i++) {
-        const t = i / 24;
-        pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * t, postH - 0.1 - Math.sin(Math.PI * t) * sag, a[1] + (b[1] - a[1]) * t));
-      }
-      const curve = new THREE.CatmullRomCurve3(pts);
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.025, 4), new THREE.MeshBasicMaterial({ color: '#4a3a30' }));
-      st.add(tube);
-      for (let i = 1; i < n; i++) {
-        const p = curve.getPoint(i / n);
-        const col = new THREE.Color(bulbColors[(i + this.bulbs.length) % bulbColors.length]);
-        const m = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.6, roughness: 0.3 });
-        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), m);
-        bulb.position.copy(p).add(new THREE.Vector3(0, -0.16, 0));
-        st.add(bulb);
-        this.bulbs.push(bulb);
-      }
-    };
-    wire(posts[1], posts[2], 10, 0.7);
-    wire(posts[3], posts[0], 10, 0.7);
-    // diagonal bunting
-    this.flags = [];
-    const flagColors = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#f78c6b', '#c77dff'];
-    const buntA = posts[0];
-    const buntB = posts[1];
-    for (let i = 1; i < 22; i++) {
-      const t = i / 22;
-      const x = buntA[0] + (buntB[0] - buntA[0]) * t;
-      const z = buntA[1] + (buntB[1] - buntA[1]) * t;
-      const y = postH - 0.2 - Math.sin(Math.PI * t) * 0.8;
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute([-0.22, 0, 0, 0.22, 0, 0, 0, -0.5, 0], 3));
-      g.computeVertexNormals();
-      const f = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: flagColors[i % flagColors.length], side: THREE.DoubleSide, roughness: 0.9 }));
-      f.position.set(x, y, z);
-      f.rotation.y = Math.atan2(buntB[0] - buntA[0], buntB[1] - buntA[1]) + Math.PI / 2;
-      f.userData.phase = i * 0.7;
-      st.add(f);
-      this.flags.push(f);
-    }
-
-    // Party point lights (fade in as the night goes on)
+  buildPartyLights() {
     this.partyLights = [];
-    const pl = [['#ff6fb5', -4, 3.5, 0], ['#4fe3ff', 4, 3.5, 0], ['#ffd36b', 0, 5, 3]];
+    const pl = [['#ff4fb0', 3.5, 2.3, 4.6], ['#3ce6ff', -3.5, 2.3, 4.6], ['#ffd36b', 0, 3.4, -3], ['#ff7eb6', 0, 2.4, -7]];
     for (const [c, x, y, z] of pl) {
-      const l = new THREE.PointLight(c, 0, 18, 1.6);
+      const l = new THREE.PointLight(c, 0, 16, 1.6);
       l.position.set(x, y, z);
-      st.add(l);
+      this.stage.add(l);
       this.partyLights.push(l);
     }
-
-    // Balloons beside the board
-    this.balloons = [];
-    const bc = ['#ff6b8b', '#ffd166', '#4cc9f0', '#06d6a0', '#c77dff', '#ff9f43'];
-    const clusters = [[-7.0, 0.4], [7.0, 0.4]];
-    clusters.forEach(([cx, cz], ci) => {
-      for (let i = 0; i < 3; i++) {
-        const col = bc[(i + ci * 3) % bc.length];
-        const b = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), new THREE.MeshStandardMaterial({ color: col, roughness: 0.25, metalness: 0.05 }));
-        b.scale.y = 1.18;
-        const h = 3.6 + i * 0.55;
-        const off = new THREE.Vector3((i - 1) * 0.45, h, (i % 2) * 0.3);
-        b.position.set(cx + off.x, off.y, cz + off.z);
-        b.castShadow = true;
-        b.userData = { base: b.position.clone(), phase: i + ci * 2 };
-        const str = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, h, 3), new THREE.MeshBasicMaterial({ color: '#fff' }));
-        str.position.set(cx + off.x * 0.5, h / 2, cz + off.z * 0.5);
-        st.add(b, str);
-        this.balloons.push(b);
-      }
-      // little drinks table
-      const table = new THREE.Group();
-      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.1, 16), new THREE.MeshStandardMaterial({ color: '#b97a45' }));
-      top.position.y = 1.0;
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1, 8), new THREE.MeshStandardMaterial({ color: '#8d5a33' }));
-      leg.position.y = 0.5;
-      table.add(top, leg);
-      const drinkCols = ['#ff9f43', '#4cc9f0', '#ff6b8b'];
-      for (let d = 0; d < 3; d++) {
-        const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.32, 10), new THREE.MeshStandardMaterial({ color: drinkCols[d], roughness: 0.2, transparent: true, opacity: 0.9 }));
-        const a = (d / 3) * Math.PI * 2;
-        glass.position.set(Math.cos(a) * 0.3, 1.21, Math.sin(a) * 0.3);
-        const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.3, 4), new THREE.MeshStandardMaterial({ color: '#fff' }));
-        straw.position.set(glass.position.x + 0.04, 1.42, glass.position.z);
-        straw.rotation.z = 0.25;
-        const lime = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.025, 6, 12), new THREE.MeshStandardMaterial({ color: '#9be15d' }));
-        lime.position.set(glass.position.x - 0.1, 1.36, glass.position.z);
-        table.add(glass, straw, lime);
-      }
-      table.position.set(cx, 0, cz - 1.3);
-      table.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-      st.add(table);
-    });
-
-    // A big potted palm
-    const palm = this.makePalm();
-    palm.position.set(-7.0, 0, 5.4);
-    st.add(palm);
-    const palm2 = this.makePalm();
-    palm2.position.set(7.0, 0, 5.4);
-    palm2.scale.setScalar(0.85);
-    st.add(palm2);
+    // spotlight for "your turn" moments
+    this.spot = new THREE.SpotLight('#fff1d6', 0, 22, 0.42, 0.55, 1.2);
+    this.spot.position.set(0, 7, 0);
+    this.stage.add(this.spot);
+    this.stage.add(this.spot.target);
+    this.spotOn = 0;
   }
 
-  makePalm() {
-    const g = new THREE.Group();
-    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.35, 0.7, 12), new THREE.MeshStandardMaterial({ color: '#f2e2c9', roughness: 0.8 }));
-    pot.position.y = 0.35;
-    g.add(pot);
-    const leafMat = new THREE.MeshStandardMaterial({ color: '#3fa55b', roughness: 0.7, side: THREE.DoubleSide });
-    for (let i = 0; i < 7; i++) {
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), leafMat);
-      leaf.scale.set(0.35, 0.12, 1.3);
-      const a = (i / 7) * Math.PI * 2;
-      leaf.position.set(Math.cos(a) * 0.55, 1.35 + (i % 2) * 0.2, Math.sin(a) * 0.55);
-      leaf.rotation.y = -a + Math.PI / 2;
-      leaf.rotation.x = 0.5;
-      g.add(leaf);
+  /** Point the spotlight at a stage-local position (or null to switch it off). */
+  setSpotlight(pos) {
+    this.spotTargetOn = pos ? 1 : 0;
+    if (pos) {
+      this.spot.target.position.copy(pos);
+      this.spot.position.set(pos.x + 2.5, 7.5, pos.z + 3.5);
     }
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.8, 6), new THREE.MeshStandardMaterial({ color: '#6b8f3a' }));
-    stem.position.y = 0.95;
-    g.add(stem);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    return g;
+  }
+
+  /** A simple stand-in yacht if the GLB can't be loaded. */
+  buildFallbackYacht() {
+    const hull = new THREE.Mesh(new THREE.CapsuleGeometry(7, 36, 6, 16), new THREE.MeshStandardMaterial({ color: '#f3e3cc', roughness: 0.7 }));
+    hull.rotation.x = Math.PI / 2;
+    hull.scale.set(1, 1, 0.45);
+    hull.position.y = 1;
+    this.yacht.add(hull);
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(13, 0.4, 46), new THREE.MeshStandardMaterial({ color: '#d99a5b' }));
+    deck.position.y = 2.8;
+    deck.receiveShadow = true;
+    this.yacht.add(deck);
+    this.deckY = 3.0;
+    this.layout = {
+      stage: [0, 3, -15], deck: 3,
+      spots: {
+        start: [0, -2], stools: [[2.4, 3.7, 0.95], [3.6, 3.7, 0.95], [4.8, 3.7, 0.95]], bar_lean: [[5.6, 3.6]],
+        sofa: [[5.5, -4.3, -1, 0.6], [5.5, -2.6, -1, 0.6]], dj: [[-3.8, 5.6]], dance: [[-1.2, -3.2], [1.2, -3.4]],
+        team: [[[2.9, -5], [4.4, -5], [3.2, -3.9], [4.7, -3.9]], [[-2.9, -5], [-4.4, -5], [-3.2, -3.9], [-4.7, -3.9]]],
+        turn: [-2.6, -5.2],
+      },
+    };
+    this.stage.position.set(0, 3, -15);
+    this.buildPartyLights();
   }
 
   setParty(t) { this.partyTarget = THREE.MathUtils.clamp(t, 0, 1); }
@@ -718,28 +601,55 @@ export class World {
     this.yacht.rotation.z = Math.sin(t * 0.55) * 0.012;
     this.yacht.rotation.x = Math.sin(t * 0.4 + 1) * 0.006;
 
-    // shadow camera follows stage; clipping box follows the bobbing deck
+    // shadow camera follows the yacht
     if (this.stage) {
       const sp = this.stage.getWorldPosition(_v);
-      if (this.clipAbove) {
-        this.clipAbove.constant = sp.y + 2.3;
-        this.clipBehind.constant = -(sp.z + 6.6);
-      }
+      sp.z += 12;
       this.sun.target.position.copy(sp);
       this.sun.position.copy(sp).addScaledVector(this.sunDir, 80);
     }
 
-    if (this.bulbs) {
-      this.bulbs.forEach((b, i) => {
-        b.material.emissiveIntensity = 0.5 + p * 2.2 + Math.sin(t * 3 + i * 0.9) * (0.15 + p * 0.5);
-      });
-      this.partyLights.forEach((l, i) => { l.intensity = p * (18 + Math.sin(t * 2 + i * 2) * 6); });
-      this.flags.forEach((f) => { f.rotation.x = Math.sin(t * 2.4 + f.userData.phase) * 0.25; });
-      this.balloons.forEach((b) => {
-        const d = b.userData;
-        b.position.x = d.base.x + Math.sin(t * 0.9 + d.phase) * 0.08;
-        b.position.y = d.base.y + Math.sin(t * 1.3 + d.phase) * 0.1;
-      });
+    // party yacht lighting: everything glows brighter as the night goes on
+    const night = k.night;
+    const m = this.yachtMats;
+    if (m) {
+      const beat = (Math.sin(t * 7.5) + 1) / 2;
+      if (m.bulb) m.bulb.emissiveIntensity = 1.2 + night * 3.5 + Math.sin(t * 2.3) * 0.2;
+      if (m.led_pink) m.led_pink.emissiveIntensity = 1.6 + night * 4 + beat * night;
+      if (m.led_cyan) m.led_cyan.emissiveIntensity = 1.6 + night * 4 + (1 - beat) * night;
+      if (m.neon) m.neon.emissiveIntensity = 1.8 + night * 2.2 + (Math.random() < 0.02 ? -1.2 : 0);
+      if (m.tub_water) {
+        m.tub_water.emissiveIntensity = 0.9 + night * 1.6;
+        if (m.tub_water.map) m.tub_water.map.offset.set(Math.sin(t * 0.3) * 0.1, t * 0.03);
+      }
+      if (m.dance) {
+        m.dance.emissiveIntensity = 1.1 + night * 1.6 + beat * 0.5;
+        this.danceT = (this.danceT || 0) + dt;
+        if (this.danceT > 0.47) {
+          this.danceT = 0;
+          this.danceStep = ((this.danceStep || 0) + 1) % 6;
+          if (m.dance.map) m.dance.map.offset.set(this.danceStep / 6, (this.danceStep % 2) / 6);
+        }
+      }
+      if (m.screen) m.screen.emissiveIntensity = 1 + beat * 0.6;
+    }
+    if (this.discoBall) this.discoBall.rotation.y += dt * 0.9;
+    if (this.startButton) {
+      const pulse = (Math.sin(t * 4) + 1) / 2;
+      this.startButton.material.emissiveIntensity = 1.2 + pulse * 1.6 + (this.startHover ? 2 : 0);
+      const s = 1 + (this.startHover ? 0.12 : 0) + pulse * 0.04;
+      this.startButton.scale.copy(this.startButton.userData.baseScale).multiplyScalar(s);
+    }
+    for (const f of this.floats || []) {
+      const d = f.userData;
+      f.position.set(d.base.x + Math.sin(t * 0.12 + d.phase) * 2.5, d.base.y + Math.sin(t * 1.3 + d.phase) * 0.15, d.base.z + Math.cos(t * 0.1 + d.phase) * 2);
+      f.rotation.y = Math.sin(t * 0.15 + d.phase) * 1.2;
+      f.rotation.z = Math.sin(t * 1.1 + d.phase) * 0.05;
+    }
+    if (this.partyLights) {
+      this.partyLights.forEach((l, i) => { l.intensity = (0.15 + night * 0.85) * (16 + Math.sin(t * 2 + i * 2) * 5); });
+      this.spotOn += ((this.spotTargetOn || 0) - this.spotOn) * Math.min(1, dt * 4);
+      this.spot.intensity = this.spotOn * (60 + night * 60);
     }
 
     this.clouds.children.forEach((c) => {

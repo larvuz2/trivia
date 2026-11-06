@@ -14,6 +14,7 @@ export function newGame() {
     teams: [[0, 2], [1, 3]],
     scores: [0, 0],
     turn: 0,
+    pickIdx: [0, 0], // which couple of each team plays next (the girls alternate)
     used: {},
     doubleKey: null,
     askUsed: [false, false],
@@ -46,6 +47,7 @@ export function startBoard(g, settings) {
   g.scores = [0, 0];
   g.used = {};
   g.turn = Math.random() < 0.5 ? 0 : 1;
+  g.pickIdx = [0, 0];
   g.askUsed = [false, false];
   g.history = [];
   g.current = null;
@@ -60,7 +62,7 @@ export function remaining(g) {
 }
 
 function snapshot(g) {
-  g.history.push(JSON.stringify({ scores: g.scores, used: g.used, turn: g.turn, askUsed: g.askUsed }));
+  g.history.push(JSON.stringify({ scores: g.scores, used: g.used, turn: g.turn, askUsed: g.askUsed, pickIdx: g.pickIdx }));
   if (g.history.length > 40) g.history.shift();
 }
 
@@ -70,6 +72,12 @@ export function undo(g) {
   Object.assign(g, JSON.parse(last));
   g.current = null;
   return true;
+}
+
+/** Couple index whose girl plays for `team` right now. */
+export function activeCouple(g, team) {
+  const idx = (g.pickIdx || [0, 0])[team] % 2;
+  return g.teams[team][idx];
 }
 
 export function pickTile(g, c, r) {
@@ -126,6 +134,8 @@ export function finishQuestion(g) {
   const cur = g.current;
   if (!cur) return;
   g.used[cur.key] = true;
+  g.pickIdx = g.pickIdx || [0, 0];
+  g.pickIdx[cur.picker] = (g.pickIdx[cur.picker] + 1) % 2;
   g.turn = 1 - cur.picker;
   g.current = null;
   g.phase = 'board';

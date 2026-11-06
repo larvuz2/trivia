@@ -23,6 +23,6 @@ def run(name):
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else 'all'
-    for name in (['bay', 'sierra', 'props'] if what == 'all' else [what]):
+    for name in (['textures', 'yacht', 'bay', 'sierra', 'props'] if what == 'all' else [what]):
         print('== building', name)
         run(name)

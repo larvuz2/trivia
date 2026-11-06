@@ -17,18 +17,23 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
 
 ## The game flow
 
-1. **Main menu** — all eight characters idle on the yacht; slow cinematic orbit of the bay.
-2. **The shuffle** — couples gather, drumroll, then dash (and sometimes faceplant) into two teams.
+1. **Main menu** — the eight characters hang out on the party yacht: one DJs, two sit at the bar, a couple lounges,
+   a couple dances. Click the glowing **START** button on the LED dance floor (or press Enter).
+2. **Choose your teams** — press SHUFFLE: drumroll, then the couples dash (and sometimes faceplant) into two teams on deck.
    Shuffle again or lock the teams.
-3. **Team reveal** — Team Sunset vs Team Tidal Wave, stickers and scores.
-4. **The board** — a physical 5×5 board on the aft deck, flanked by two giant scoreboards. Teams alternate picks.
-5. **Question reveal** — a 5-second cinematic: tile lights up → camera launches into the board → a character
-   moment with a category prop (photo album, treasure chest, heart, water dive, spinning wheel) → card flies in.
-6. **Answer & reaction** — the host scores it; characters cheer, cry, laugh, get surprised; confetti.
-7. **Final Splash** — secret wagers, one last question, simultaneous reveal.
-8. **Yacht champions** — the winners dance, the losers sulk.
+3. **Team reveal** — Team Sunset vs Team Tidal Wave.
+4. **"NAME'S TURN!"** — every turn belongs to one player. Teams alternate and each team's girls take turns.
+   Only that character stays on deck, in a spotlight, with her name huge on screen.
+5. **The board** — a glass panel fills most of the screen; the player and the sea stay visible on the left.
+   She picks a tile, it flips, and a short category moment plays next to her (photo album, treasure chest, heart,
+   camera dive into the water, spinning wheel).
+6. **Question** — the host scores it. On a miss the other team's player pops onto deck to steal.
+   If the question is about one of the boys, he pops in to react; Ask the Boys brings the team's boys over for a hint.
+7. **Final Splash** — secret wagers, one last question.
+8. **Yacht champions** — the winners dance around the START button, the losers sulk on the sofas.
 
-The sky slowly turns from golden hour into a starry party night as the board empties, and the string lights glow brighter.
+The sky slowly turns from afternoon to golden hour to a party night as the board empties, and the yacht's LEDs,
+neon sign, string lights, hot tub and dance floor glow brighter.
 
 ## Host controls (keyboard)
 
@@ -55,6 +60,25 @@ The host bar at the bottom also has all of these as buttons, plus **Adjust score
 - **The Final Splash** — wager up to your score, answer, win or lose the wager.
 - **Stealing** — if a team misses, the other team gets a shot.
 - Teasing: big lead swings shake the camera; the trailing team gets a little rain cloud; someone falls asleep on long questions; the boy a question is about reacts.
+
+## The party yacht (built in Blender)
+
+`tools/blender/yacht.py` models the yacht from scratch (concept reference made with FLUX on fal):
+
+- Lofted hull with a raked bow, navy boot band, coral pinstripe, chrome rub rail, dark hull windows and portholes,
+  underwater LEDs, fenders, anchor.
+- Swim platform with twin stairs, boarding ladder, paddle boards, the YACHT CLUB · LA PAZ name board and a Mexican ensign.
+- **Party deck:** LED dance floor with the START pedestal, a walnut-and-marble bar with stools, cocktails, back bar
+  with bottles and a pink neon sign, a DJ booth with decks and speaker stacks, a disco ball, a stern lounge with
+  champagne and fruit, side lounges, palms, life rings, string lights and bunting.
+- **Flybridge:** glowing hot tub, striped sun pads, a second bar, lounge, helm, hardtop with radar arch and domes.
+- **Bow:** big sun pads with towels, bean bags, windlass.
+- Floats on the water: a pink flamingo and a sprinkled donut.
+
+Textures come from `tools/blender/textures.py`: teak decking (with normal map), walnut, marble, canvas cushion fabric,
+stripes, neon sign, name board, flag, dance floor and hot tub water. The game reads named parts
+(`start_button`, `dance_floor`, `disco_ball`, …) and `yacht-layout.json` (where people sit, dance and stand).
+`tools/yacht-viewer.html` shows the yacht on its own.
 
 ## The Sea of Cortez scenery (built in Blender)
 
@@ -102,8 +126,7 @@ Game progress also auto-saves, so a refresh offers **Continue saved game**.
 
 ## Assets
 
-- `public/models/yacht.glb` — the yacht, generated from the concept art with **Tripo v2.5 image-to-3D on fal.ai**,
-  then optimized (2048 px WebP textures, 9 MB → 2 MB).
+- `public/models/yacht.glb` + `yacht-layout.json` — the party yacht, built with `tools/blender/yacht.py`.
 - `public/models/env/*` — the Sea of Cortez scenery built with the Blender scripts above.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.
 - Everything else (water and sky shaders, characters, board, deck props, sounds and music) is procedural.
@@ -115,11 +138,10 @@ Game progress also auto-saves, so a refresh offers **Continue saved game**.
 | `src/world.js` | Sky, Sea of Cortez water shader, lights, the yacht, deck props, day → golden hour → party blend |
 | `src/environment.js` | Loads and places the Blender scenery; pangas, kayaks, pelicans, dolphins, sea lions, foam |
 | `src/characters.js` | Placeholder characters, procedural animation library, `.glb` swap-in, 2D stickers |
-| `src/board.js` | The 3D trivia board and the two scoreboards |
 | `src/fx.js` | Confetti, splashes and the five category cinematic props |
 | `src/camera.js` | Camera shots, orbits, shake |
 | `src/game.js` | Rules: teams, turns, scoring, steal, undo, Double Trouble, Final Splash |
-| `src/main.js` | Screens / state machine, cinematics, host controls |
+| `src/main.js` | Screens / state machine (deck start button, teams, turns, glass board panel), cinematics, host controls |
 | `src/admin.js` | Setup panel |
 | `src/storage.js` | localStorage + IndexedDB persistence, export / import |
 | `src/audio.js` | Synthesized sound effects and music loop |

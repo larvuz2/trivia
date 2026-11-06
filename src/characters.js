@@ -78,6 +78,10 @@ export class Character {
     this.body = new THREE.Group(); // procedural bounce/lean
     this.root.add(this.body);
     this.state = 'idle';
+    this.baseState = 'idle'; // what they go back to after a reaction (idle, sit, dance, dj)
+    this.seatY = 0.95;
+    this.popScale = 1;
+    this.popTarget = 1;
     this.stateTime = 0;
     this.target = null;
     this.facing = 0;
@@ -343,8 +347,30 @@ export class Character {
 
   react(state, dur = 2.4) { this.setState(state, dur); }
 
-  moveTo(x, z, { face = 0, stumble = false, delay = 0, speed = 4.2 } = {}) {
+  /** Hang out: 'idle' | 'sit' | 'dance' | 'dj'. */
+  hangOut(pose, seatY = 0.95) {
+    this.baseState = pose;
+    this.seatY = seatY;
+    this.setState(pose);
+  }
+
+  /** Pop in / out of view with a little bounce. */
+  pop(visible, instant = false) {
+    this.popTarget = visible ? 1 : 0;
+    if (instant) {
+      this.popScale = this.popTarget;
+      this.root.visible = visible;
+      this.root.scale.setScalar(Math.max(0.001, this.popScale));
+    } else if (visible) {
+      this.root.visible = true;
+      this.popScale = Math.min(this.popScale, 0.01);
+    }
+  }
+
+  moveTo(x, z, { face = 0, stumble = false, delay = 0, speed = 4.2, then = 'idle', seatY = 0.95 } = {}) {
     this.target = new THREE.Vector3(x, 0, z);
+    this.baseState = then;
+    this.seatY = seatY;
     this.arriveFacing = face;
     this.willStumble = stumble;
     this.speed = speed;
@@ -358,12 +384,12 @@ export class Character {
     this.targetFacing = Math.atan2(x - this.root.position.x, z - this.root.position.z);
   }
 
-  place(x, z, face = 0) {
+  place(x, z, face = 0, pose = 'idle', seatY = 0.95) {
     this.root.position.set(x, 0, z);
     this.facing = this.targetFacing = face;
     this.root.rotation.y = face;
     this.target = null;
-    this.setState('idle');
+    this.hangOut(pose, seatY);
   }
 
   update(dt) {
@@ -420,7 +446,7 @@ export class Character {
           p.set(this.target.x, 0, this.target.z);
           this.target = null;
           this.targetFacing = this.arriveFacing;
-          this.setState('idle');
+          this.setState(this.baseState || 'idle');
           break;
         }
         const step = Math.min(dist, this.speed * dt);
@@ -509,6 +535,32 @@ export class Character {
         armL = 0.1; armR = -0.1;
         break;
       }
+      case 'sit': {
+        b.position.y = this.seatY - 0.44;
+        b.rotation.x = -0.05;
+        footA = 0;
+        this.sitLegs = true;
+        armL = 0.35; armR = -0.35;
+        armLx = armRx = -0.5;
+        headTurn = Math.sin(T * 0.45) * 0.45;
+        headTilt = Math.sin(T * 0.3) * 0.08;
+        break;
+      }
+      case 'dj': {
+        const beat = T * 7.5;
+        b.position.y = Math.abs(Math.sin(beat)) * 0.08;
+        headTilt = Math.abs(Math.sin(beat)) * 0.25;
+        armR = -0.5;
+        armRx = -1.2 + Math.sin(beat) * 0.15;
+        armL = Math.sin(T * 0.9) > 0.6 ? 2.6 : 0.6;
+        armLx = Math.sin(T * 0.9) > 0.6 ? 0 : -1.1;
+        break;
+      }
+      case 'wave': {
+        armR = -2.6 + Math.sin(t * 10) * 0.35;
+        b.position.y = Math.abs(Math.sin(t * 4)) * 0.05;
+        break;
+      }
       case 'point': {
         armR = -1.45;
         armRx = -1.3;
@@ -521,7 +573,19 @@ export class Character {
     }
 
     if (this.stateDur != null && this.state !== 'walk' && this.state !== 'stumble' && this.stateTime > this.stateDur) {
-      this.setState('idle');
+      this.setState(this.baseState || 'idle');
+    }
+    // sitting reactions stay seated
+    if (this.baseState === 'sit' && this.state !== 'sit' && this.state !== 'walk' && this.state !== 'stumble') {
+      b.position.y += this.seatY - 0.44;
+    }
+    // pop in/out
+    if (this.popScale !== this.popTarget) {
+      this.popScale += (this.popTarget - this.popScale) * Math.min(1, dt * 10);
+      if (Math.abs(this.popScale - this.popTarget) < 0.01) this.popScale = this.popTarget;
+      const over = this.popTarget === 1 ? 1 + Math.sin(this.popScale * Math.PI) * 0.15 : 1;
+      this.root.scale.setScalar(Math.max(0.001, this.popScale * over));
+      if (this.popScale === 0) this.root.visible = false;
     }
 
     // face direction smoothing
@@ -534,8 +598,9 @@ export class Character {
     if (this.placeholder.visible) {
       this.arms[0].rotation.set(armLx, 0, -armL);
       this.arms[1].rotation.set(armRx, 0, -armR);
-      this.feet[0].rotation.x = footA;
-      this.feet[1].rotation.x = -footA;
+      const seated = this.baseState === 'sit' && this.state !== 'walk' && this.state !== 'stumble';
+      this.feet[0].rotation.x = seated ? -1.45 : footA;
+      this.feet[1].rotation.x = seated ? -1.45 : -footA;
       this.head.rotation.set(headTilt, headTurn, 0);
       // blink
       this.blinkT -= dt;

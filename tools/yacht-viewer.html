@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yacht Viewer</title>
+  <style>html, body { margin: 0; height: 100%; overflow: hidden; background: #8fd3f0; }</style>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#9fd8f2');
+    const env = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 2000);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    scene.add(new THREE.HemisphereLight('#cfe8ff', '#5fc9c0', 1.3));
+    const sun = new THREE.DirectionalLight('#fff3df', 3);
+    sun.position.set(30, 50, -35);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40 });
+    scene.add(sun);
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#19c6c9', roughness: 0.3 }));
+    sea.rotation.x = -Math.PI / 2;
+    sea.receiveShadow = true;
+    scene.add(sea);
+    const gltf = await new GLTFLoader().loadAsync('../public/models/yacht.glb');
+    gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.material.envMap = env; o.material.envMapIntensity = 0.8; } });
+    scene.add(gltf.scene);
+    controls.target.set(0, 4, -5);
+    camera.position.set(35, 25, -45);
+    renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+    window.viewer = { camera, controls, scene };
+  </script>
+</body>
+</html>

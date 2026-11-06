@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { World } from './world.js';
-import { Character, defaultSticker } from './characters.js';
-import { Board, Scoreboard } from './board.js';
+import { Character, defaultSticker, roundRect } from './characters.js';
 import { Confetti, Splash, makeCategoryProp } from './fx.js';
 import { CameraRig } from './camera.js';
 import { sfx, unlockAudio, startMusic, setAudioEnabled } from './audio.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL } from './storage.js';
 import * as G from './game.js';
+import { POINTS } from './data.js';
 import { openAdmin } from './admin.js';
 import { loadSeaOfCortez } from './environment.js';
 
@@ -22,11 +22,10 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
-renderer.localClippingEnabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 7000);
-camera.position.set(60, 30, -60);
+camera.position.set(120, 60, -140);
 const world = new World(renderer);
 const scene = world.scene;
 const rig = new CameraRig(camera);
@@ -37,22 +36,19 @@ let config = loadConfig();
 let game = G.newGame();
 const savedGame = loadGame();
 let stickers = {}; // character id -> url
-
-const BOARD_Z = 5.3;
-const board = new Board();
-const scoreboards = [new Scoreboard(0), new Scoreboard(1)];
 let characters = [];
 let props = [];
-let gloomClouds = [];
 let env = null; // Sea of Cortez scenery (Blender assets)
+let startLabel = null;
+let guests = []; // boys popped in next to the player (subject / ask the boys)
 
-// Team 0 stands on screen-left. The camera looks toward +Z from the stern,
-// so screen-left is +X in stage space.
+// Team 0 is shown on the left. From the stern camera, screen-left is +X in stage space.
 const SIDE = [1, -1];
 
-function sw(x, y, z) {
-  return world.stage.localToWorld(new THREE.Vector3(x, y, z));
-}
+const sw = (x, y, z) => world.stage.localToWorld(new THREE.Vector3(x, y, z));
+const spots = () => world.layout.spots;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const wide = () => window.innerWidth >= 900;
 
 // ------------------------------------------------------------------
 // Loading
@@ -65,52 +61,34 @@ function setLoad(p, txt) {
 }
 
 async function init() {
-  setLoad(0.05, 'Inflating the beach balls…');
+  setLoad(0.05, 'Chilling the champagne…');
   try {
     await Promise.all([document.fonts.load('64px "Lilita One"'), document.fonts.load('20px "Fredoka"')]);
   } catch { /* fonts optional */ }
-  setLoad(0.1, 'Sailing the yacht into La Paz…');
+  setLoad(0.1, 'Sailing the party yacht into La Paz…');
   try {
-    await world.loadYacht('models/yacht.glb', (p) => setLoad(0.1 + p * 0.65));
+    await world.loadYacht('models/yacht.glb', (p) => setLoad(0.1 + p * 0.6));
   } catch (e) {
     console.warn('Yacht model failed to load, using fallback', e);
     world.buildFallbackYacht();
   }
-  setLoad(0.8, 'Painting the Sea of Cortez…');
+  setLoad(0.75, 'Painting the Sea of Cortez…');
   try {
-    env = await loadSeaOfCortez(world, (p) => setLoad(0.8 + p * 0.1));
+    env = await loadSeaOfCortez(world, (p) => setLoad(0.75 + p * 0.15));
     env.addHullFoam(world.yachtModel);
   } catch (e) {
     console.warn('Sea of Cortez scenery failed to load, using simple islands', e);
     world.buildBaja();
   }
-  setLoad(0.9, 'Hanging the string lights…');
-
-  world.stage.add(board.group);
-  board.group.position.set(0, 0, BOARD_Z);
-  board.group.rotation.y = Math.PI;
-  board.setCategories(config.categories);
-
-  scoreboards.forEach((sb, i) => {
-    world.stage.add(sb.group);
-    sb.group.position.set(SIDE[i] * 6.45, 5.3, BOARD_Z - 0.3);
-    sb.group.rotation.y = Math.PI;
-    sb.setPole(5.3);
-  });
-
+  setLoad(0.92, 'Turning on the dance floor…');
   buildCharacters();
+  buildStartLabel();
   await refreshStickers();
   applySettings();
-
-  world.updatables.push((dt) => {
-    board.update(dt, world.party);
-    scoreboards.forEach((s) => s.update(dt));
-  });
-
   setLoad(1, 'All aboard!');
   document.getElementById('loading').classList.add('done');
   setTimeout(() => document.getElementById('loading')?.remove(), 900);
-  showMenu();
+  showMenu(true);
 }
 
 function buildCharacters() {
@@ -120,7 +98,7 @@ function buildCharacters() {
     world.stage.add(ch.root);
     return ch;
   });
-  placeCenter(true);
+  hangOut(true);
   characters.forEach(async (ch) => {
     if (ch.data.model) {
       try { await ch.loadModel(await mediaURL(ch.data.model)); } catch (e) { console.warn('model load failed', e); }
@@ -133,15 +111,44 @@ async function refreshStickers() {
   await Promise.all(config.characters.map(async (c, i) => {
     stickers[c.id] = (c.sticker && (await mediaURL(c.sticker))) || defaultSticker(c, i);
   }));
-  updateScoreboards(true);
 }
 
 function applySettings() {
   setAudioEnabled({ sound: config.settings.sound, music: config.settings.music });
 }
 
+// floating "START GAME" sign above the pedestal
+function buildStartLabel() {
+  const c = document.createElement('canvas');
+  c.width = 640;
+  c.height = 200;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ff7a45';
+  roundRect(g, 10, 20, 620, 150, 75);
+  g.fill();
+  g.lineWidth = 10;
+  g.strokeStyle = '#fff4e0';
+  g.stroke();
+  g.font = '92px "Lilita One", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.fillText('START GAME', 324, 104);
+  g.fillStyle = '#fff';
+  g.fillText('START GAME', 320, 98);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  startLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  startLabel.scale.set(3.2, 1.0, 1);
+  startLabel.renderOrder = 30;
+  const [x, z] = spots().start;
+  startLabel.position.set(x, 3.0, z);
+  startLabel.userData.base = startLabel.position.y;
+  world.stage.add(startLabel);
+}
+
 // ------------------------------------------------------------------
-// Character layout helpers
+// Characters on deck
 // ------------------------------------------------------------------
 const coupleOf = (i) => characters.filter((c) => c.data.couple === i);
 const girlOf = (couple) => characters.find((c) => c.data.couple === couple && c.data.role === 'girl');
@@ -149,31 +156,36 @@ const boyOf = (couple) => characters.find((c) => c.data.couple === couple && c.d
 const teamChars = (t) => game.teams[t].flatMap((cp) => coupleOf(cp));
 const teamName = (t) => config.settings.teamNames[t];
 const teamColor = (t) => config.settings.teamColors[t];
+const activeGirl = (t) => girlOf(G.activeCouple(game, t)) || teamChars(t)[0];
 
-function centerSpot(couple) {
-  const x = (1.5 - couple) * 2.3;
-  return [[x + 0.45, -0.8], [x - 0.45, -0.8]]; // girl, boy
+/** Everyone hanging out on deck: DJ, bar stools, lounge, dance floor. */
+function hangOutPlan() {
+  const s = spots();
+  const face = Math.PI;
+  const sofaFace = (dir) => Math.atan2(dir, 0);
+  return [
+    [boyOf(0), s.dj[0][0], s.dj[0][1], face, 'dj'],
+    [girlOf(0), s.stools[0][0], s.stools[0][1], face - 0.2, 'sit', s.stools[0][2]],
+    [girlOf(1), s.stools[1][0], s.stools[1][1], face + 0.15, 'sit', s.stools[1][2]],
+    [boyOf(1), s.bar_lean[0][0], s.bar_lean[0][1], face - 0.6, 'idle'],
+    [girlOf(2), s.sofa[0][0], s.sofa[0][1], sofaFace(s.sofa[0][2]), 'sit', Math.max(0.62, s.sofa[0][3])],
+    [boyOf(2), s.sofa[1][0], s.sofa[1][1], sofaFace(s.sofa[1][2]), 'sit', Math.max(0.62, s.sofa[1][3])],
+    [girlOf(3), s.dance[0][0], s.dance[0][1], face + 0.3, 'dance'],
+    [boyOf(3), s.dance[1][0], s.dance[1][1], face - 0.3, 'dance'],
+  ].filter((p) => p[0]);
 }
 
-function placeCenter(instant = false) {
-  for (let cp = 0; cp < 4; cp++) {
-    const [gs, bs] = centerSpot(cp);
-    const g = girlOf(cp);
-    const b = boyOf(cp);
-    if (instant) {
-      g?.place(gs[0], gs[1], Math.PI);
-      b?.place(bs[0], bs[1], Math.PI);
-    } else {
-      g?.moveTo(gs[0], gs[1], { face: Math.PI, delay: Math.random() * 0.3 });
-      b?.moveTo(bs[0], bs[1], { face: Math.PI, delay: Math.random() * 0.3 });
-    }
+function hangOut(instant = false) {
+  for (const [ch, x, z, f, pose, seat] of hangOutPlan()) {
+    ch.pop(true, instant);
+    if (instant) ch.place(x, z, f, pose, seat);
+    else ch.moveTo(x, z, { face: f, then: pose, seatY: seat, delay: Math.random() * 0.4, speed: 4.5 });
   }
 }
 
 function teamSpot(team, k, role) {
-  const s = SIDE[team];
-  const x = s * (k === 0 ? 2.9 : 5.9);
-  return role === 'girl' ? [x, -0.9] : [x + s * 0.45, 0.6];
+  const list = spots().team[team];
+  return list[(role === 'girl' ? 0 : 2) + k];
 }
 
 function placeTeams({ instant = false, stumbles = 0 } = {}) {
@@ -182,32 +194,47 @@ function placeTeams({ instant = false, stumbles = 0 } = {}) {
     couples.forEach((cp, k) => {
       for (const ch of coupleOf(cp)) {
         const [x, z] = teamSpot(t, k, ch.data.role);
-        const face = Math.PI + SIDE[t] * 0.35;
-        if (instant) ch.place(x, z, face);
-        else runners.push([ch, x, z, face]);
+        const f = Math.PI + SIDE[t] * 0.25;
+        ch.pop(true, instant);
+        if (instant) ch.place(x, z, f);
+        else runners.push([ch, x, z, f]);
       }
     });
   });
   const stumblers = new Set();
   while (stumblers.size < Math.min(stumbles, runners.length)) stumblers.add(Math.floor(Math.random() * runners.length));
-  runners.forEach(([ch, x, z, face], i) => {
-    ch.moveTo(x, z, { face, stumble: stumblers.has(i), delay: Math.random() * 0.35, speed: 5 + Math.random() * 1.5 });
-  });
+  runners.forEach(([ch, x, z, f], i) => ch.moveTo(x, z, { face: f, stumble: stumblers.has(i), delay: Math.random() * 0.35, speed: 5 + Math.random() * 1.5 }));
 }
+
+function showOnly(list) {
+  const keep = new Set(list);
+  for (const c of characters) c.pop(keep.has(c));
+}
+
+function showAll() { characters.forEach((c) => c.pop(true)); }
 
 // ------------------------------------------------------------------
 // Camera shots (stage space)
 // ------------------------------------------------------------------
 const shots = {
-  boardWide: () => [sw(0, 12.2, -15.5), sw(0, 5.2, 3.2)],
-  shuffle: () => [sw(0, 8.5, -11.5), sw(0, 1.4, 0)],
-  reveal: () => [sw(0, 13.5, -19.5), sw(0, 2.6, 1.5)],
+  team: () => [sw(0, 6.6, -14.5), sw(0, 1.0, -2.6)],
+  reveal: () => [sw(0, 9, -17.5), sw(0, 1.2, -2.6)],
 };
 
 function menuOrbit() {
-  // wide establishing shot: whole yacht low in frame, sky and Baja mountains behind
-  const c = new THREE.Vector3(0, 2, -4);
-  rig.startOrbit(c, 66, 17, 0.035, -2.3, new THREE.Vector3(0, 9, 0));
+  rig.setShift(0);
+  rig.startOrbit(sw(0, 1.2, -1.0), 19, 8.5, 0.22, Math.PI + 0.5, new THREE.Vector3(0, 0.6, 0), 0.75);
+}
+
+/** Frame the player standing on the turn spot. mode: 'close' (centered) or 'board' (left third, panel on the right). */
+function turnShot(ch, mode = 'close', dur = 1.4) {
+  const p = ch.root.position;
+  const dir = new THREE.Vector3(-0.9, 0, 4.4).normalize();
+  const dist = mode === 'close' ? 4.4 : 6.2;
+  const camLocal = p.clone().addScaledVector(dir, dist).add(new THREE.Vector3(0, mode === 'close' ? 1.7 : 2.0, 0));
+  rig.setShift(mode === 'board' && wide() ? 0.33 : 0);
+  ch.faceTowards(camLocal.x, camLocal.z);
+  return rig.shot(sw(camLocal.x, camLocal.y, camLocal.z), sw(p.x, mode === 'close' ? 1.25 : 1.15, p.z), dur);
 }
 
 // ------------------------------------------------------------------
@@ -235,11 +262,10 @@ function globalButtons() {
   const s = config.settings;
   const n = el(`<div class="global-btns">
     <button class="icon-btn" data-act="sound" title="Sound">${s.sound ? '🔊' : '🔇'}</button>
-    <button class="icon-btn" data-act="music" title="Music">${s.music ? '🎵' : '🎶'}</button>
+    <button class="icon-btn ${s.music ? '' : 'off'}" data-act="music" title="Music">🎵</button>
     <button class="icon-btn" data-act="fs" title="Fullscreen (F)">⛶</button>
     <button class="icon-btn" data-act="help" title="Host shortcuts (?)">?</button>
   </div>`);
-  n.querySelector('[data-act=music]').classList.toggle('off', !s.music);
   n.addEventListener('click', (e) => {
     const a = e.target.closest('button')?.dataset.act;
     if (!a) return;
@@ -261,16 +287,17 @@ function toggleHelp() {
   const n = el(`<div id="help" class="modal-wrap"><div class="modal help">
     <h2>Host shortcuts</h2>
     <table>
-      <tr><td><kbd>Space</kbd></td><td>Reveal / hide answer</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>Start the game (main menu)</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Reveal / hide answer · skip the "turn" intro</td></tr>
       <tr><td><kbd>C</kbd></td><td>Correct — award points</td></tr>
       <tr><td><kbd>X</kbd></td><td>Wrong (opens a steal if enabled)</td></tr>
       <tr><td><kbd>N</kbd></td><td>No answer — skip question</td></tr>
       <tr><td><kbd>B</kbd></td><td>Ask the Boys (once per team)</td></tr>
-      <tr><td><kbd>P</kbd></td><td>Pause / resume timer</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Back to board (tile not used)</td></tr>
-      <tr><td><kbd>Z</kbd></td><td>Undo last question (on the board)</td></tr>
+      <tr><td><kbd>P</kbd></td><td>Pause / resume the timer</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Back to the board (tile not used)</td></tr>
+      <tr><td><kbd>Z</kbd></td><td>Undo the last question (on the board)</td></tr>
       <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
-      <tr><td><kbd>H</kbd></td><td>Hide / show host bar</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Hide / show the host bar</td></tr>
     </table>
     <button class="btn" data-close>Got it!</button>
   </div></div>`);
@@ -286,22 +313,52 @@ function toast(html, cls = '', dur = 1800) {
 }
 
 function persist() {
-  if (game.phase === 'menu') return;
+  if (['menu', 'shuffle', 'results'].includes(game.phase)) return;
   saveGame(game);
 }
 
+let hostBarHidden = false;
+function hostBar(buttons) {
+  return `<div class="host-bar ${hostBarHidden ? 'hidden' : ''}">${buttons.map(([act, label, key, cls = '']) => `<button class="hb ${cls}" data-act="${act}">${label}${key ? `<kbd>${key}</kbd>` : ''}</button>`).join('')}</div>`;
+}
+
+function teamChip(t, { compact = false } = {}) {
+  const active = game.current ? game.current.answering === t : game.turn === t;
+  return `<div class="team-chip2 ${active ? 'active' : ''} ${compact ? 'compact' : ''}" style="--team:${teamColor(t)}" data-team="${t}">
+    <div class="tc-name">${esc(teamName(t))}</div>
+    <div class="tc-score" data-score="${t}">${game.scores[t]}</div>
+    <div class="tc-stickers">${teamChars(t).map((c) => stickerImg(c, 'xs')).join('')}</div>
+    ${config.settings.askTheBoys && !compact ? `<div class="tc-ask ${game.askUsed[t] ? 'used' : ''}">🎤 ${game.askUsed[t] ? 'hint used' : 'hint ready'}</div>` : ''}
+  </div>`;
+}
+
+function playerPlate(ch, team, label) {
+  return `<div class="player-plate" style="--team:${teamColor(team)}">
+    ${stickerImg(ch, 'md')}
+    <div><div class="pp-name">${esc(ch.data.name)}</div><div class="pp-team">${esc(teamName(team))} · ${label}</div></div>
+  </div>`;
+}
+
 // ------------------------------------------------------------------
-// 1. MAIN MENU
+// 1. MAIN MENU — everyone hanging out; click the glowing button on deck
 // ------------------------------------------------------------------
-function showMenu() {
+let menuActive = false;
+
+function showMenu(intro = false) {
   game.phase = 'menu';
+  menuActive = true;
   world.setParty(0);
-  board.setUsed({}, true);
-  board.setDouble(null);
-  board.clearSelection();
-  placeCenter(rig.pos.distanceTo(sw(0, 0, 0)) > 50);
+  world.setSpotlight(null);
+  clearGuests();
+  showAll();
+  hangOut(intro);
   characters.forEach((c) => c.showName(false));
-  menuOrbit();
+  if (startLabel) startLabel.visible = true;
+  if (intro) {
+    rig.setShift(0);
+    rig.cut(sw(70, 40, -110), sw(0, 2, 0));
+    rig.shot(sw(0, 8.5, -19), sw(0, 1.8, -1), 4.5, 'inOut').then(() => { if (game.phase === 'menu') menuOrbit(); });
+  } else menuOrbit();
   const canContinue = savedGame && ['board', 'question', 'final'].includes(savedGame.phase);
   const n = setScreen(`
     <div class="menu">
@@ -310,12 +367,11 @@ function showMenu() {
         <h1><span>YACHT CLUB</span><span class="logo-trivia">TRIVIA</span></h1>
         <div class="logo-sub">La Paz · The Couples Edition</div>
       </div>
-      <div class="menu-actions">
-        <button class="btn btn-play" data-act="play">▶ PLAY GAME</button>
+      <div class="start-hint"><span class="sh-dot"></span> Click the glowing <b>START</b> button on the dance floor</div>
+      <div class="menu-corner">
         ${canContinue ? '<button class="btn btn-secondary" data-act="continue">↻ Continue saved game</button>' : ''}
         <button class="btn btn-ghost" data-act="setup">⚙ Game Setup</button>
       </div>
-      <div class="menu-foot">The four guys have been friends forever. Now the girls have to prove how well they know them.</div>
     </div>`, 'screen-menu');
   n.addEventListener('click', (e) => {
     const a = e.target.closest('[data-act]')?.dataset.act;
@@ -323,34 +379,46 @@ function showMenu() {
     unlockAudio();
     startMusic();
     sfx('click');
-    if (a === 'play') { clearGame(); game = G.newGame(); showShuffle(); }
     if (a === 'continue') continueGame();
     if (a === 'setup') openSetup();
   });
 }
 
+function startGame() {
+  if (!menuActive) return;
+  menuActive = false;
+  world.startHover = false;
+  canvas.style.cursor = 'default';
+  unlockAudio();
+  startMusic();
+  sfx('boing');
+  setTimeout(() => sfx('fanfare'), 200);
+  const [x, z] = spots().start;
+  confetti.burst(sw(x, 1.5, z), 200, { up: 10 });
+  rig.shake(0.3);
+  clearGame();
+  game = G.newGame();
+  if (startLabel) startLabel.visible = false;
+  showTeams();
+}
+
 function continueGame() {
+  menuActive = false;
+  if (startLabel) startLabel.visible = false;
   game = Object.assign(G.newGame(), savedGame);
   if (game.phase === 'question') G.cancelQuestion(game);
-  board.setUsed(game.used, true);
-  board.setDouble(game.doubleKey);
   placeTeams({ instant: true });
-  updateScoreboards(true);
-  if (game.phase === 'final') {
-    game.final = null;
-    showFinalIntro();
-  } else showBoard();
+  if (game.phase === 'final') { game.final = null; showFinalIntro(); } else startTurn();
 }
 
 function openSetup() {
-  rig.shot(...shots.boardWide(), 2);
+  menuActive = false;
   openAdmin({
     config,
     onChange: async (newCfg, what) => {
       config = newCfg;
       saveConfig(config);
       applySettings();
-      board.setCategories(config.categories);
       if (what === 'characters' || what === 'all') {
         characters.forEach((ch, i) => { ch.data = config.characters[i]; ch.refreshLabel(); });
         await refreshStickers();
@@ -360,27 +428,27 @@ function openSetup() {
     onClose: () => showMenu(),
     previewCharacter: (id) => {
       const ch = characters.find((c) => c.data.id === id);
-      if (ch) { ch.react(['cheer', 'dance', 'laugh', 'surprise'][Math.floor(Math.random() * 4)], 2); }
+      if (ch) ch.react(['cheer', 'dance', 'laugh', 'surprise', 'wave'][Math.floor(Math.random() * 5)], 2);
     },
   });
 }
 
 // ------------------------------------------------------------------
-// 2. TEAM SHUFFLE
+// 2. CHOOSE TEAMS — the shuffle, right there on deck
 // ------------------------------------------------------------------
-function showShuffle() {
+function showTeams() {
   game.phase = 'shuffle';
-  placeCenter();
   characters.forEach((c) => c.showName(true));
-  rig.shot(...shots.shuffle(), 2.4);
+  rig.setShift(0);
+  rig.shot(...shots.team(), 2.2);
   const n = setScreen(`
-    <div class="top-title"><div class="kicker">STEP 1</div><h2>THE SHUFFLE</h2><p>Four couples. Two teams. Couples always stay together.</p></div>
+    <div class="top-title"><div class="kicker">STEP 1</div><h2>CHOOSE YOUR TEAMS</h2><p>Four couples. Two teams. Couples always stay together.</p></div>
     <div class="shuffle-result" id="shuffle-result"></div>
     <div class="bottom-actions">
       <button class="btn btn-play" data-act="shuffle">🎲 SHUFFLE COUPLES</button>
       <button class="btn btn-secondary hidden" data-act="lock">🔒 LOCK TEAMS</button>
     </div>
-    <div class="shuffle-count" id="shuffle-count">Shuffle #${game.shuffleCount} · Six possible pairings</div>
+    <div class="shuffle-count" id="shuffle-count">Six possible pairings</div>
     <button class="btn btn-ghost corner-left" data-act="menu">← Menu</button>
   `, 'screen-shuffle');
   let busy = false;
@@ -395,19 +463,17 @@ function showShuffle() {
       n.querySelector('[data-act=shuffle]').disabled = true;
       n.querySelector('[data-act=lock]').classList.add('hidden');
       n.querySelector('#shuffle-result').innerHTML = '';
-      // gather in the middle, drumroll, then dash
-      if (game.shuffleCount > 0) { placeCenter(); await wait(1100); }
       sfx('drumroll');
-      characters.forEach((c) => c.react('surprise', 0.6));
+      characters.forEach((c) => c.react('surprise', 0.8));
       await wait(1700);
       G.shuffleTeams(game);
       placeTeams({ stumbles: 1 + Math.floor(Math.random() * 2) });
       sfx('whoosh');
-      await wait(2300);
+      await wait(2600);
       sfx('fanfare');
-      confetti.burst(sw(SIDE[0] * 4.4, 2.5, 0), 140);
-      confetti.burst(sw(SIDE[1] * 4.4, 2.5, 0), 140);
-      teamChars(0).concat(teamChars(1)).forEach((c) => c.react('cheer', 1.8));
+      confetti.burst(sw(SIDE[0] * 3.8, 2.5, -4.5), 140);
+      confetti.burst(sw(SIDE[1] * 3.8, 2.5, -4.5), 140);
+      characters.forEach((c) => c.react('cheer', 1.8));
       n.querySelector('#shuffle-result').innerHTML = [0, 1].map((t) => `
         <div class="team-chip team-${t}" style="--team:${teamColor(t)}">
           <div class="team-chip-name">${esc(teamName(t))}</div>
@@ -422,15 +488,9 @@ function showShuffle() {
   });
 }
 
-// ------------------------------------------------------------------
-// 3. TEAM REVEAL
-// ------------------------------------------------------------------
-async function showReveal() {
+function showReveal() {
   game.phase = 'reveal';
   G.startBoard(game, config.settings);
-  board.setUsed(game.used, true);
-  board.setDouble(game.doubleKey);
-  updateScoreboards(true);
   placeTeams({ instant: false });
   rig.shot(...shots.reveal(), 2.2);
   const n = setScreen(`
@@ -442,98 +502,131 @@ async function showReveal() {
         <div class="reveal-score">0</div>
       </div>`).join('<div class="reveal-vs">VS</div>')}
     </div>
-    <div class="bottom-actions"><button class="btn btn-play" data-act="go">🎯 TO THE BOARD!</button></div>
+    <div class="bottom-actions"><button class="btn btn-play" data-act="go">🎯 LET'S PLAY!</button></div>
     <div class="reveal-sub">The rivalry begins…</div>
   `, 'screen-reveal');
   sfx('fanfare');
-  setTimeout(() => confetti.rain(sw(0, 2, -1), 18, 260), 600);
+  setTimeout(() => confetti.rain(sw(0, 2, -4), 16, 260), 600);
   n.querySelector('[data-act=go]').addEventListener('click', () => {
     sfx('click');
     characters.forEach((c) => c.showName(false));
     persist();
-    showBoard();
+    startTurn();
   });
 }
 
 // ------------------------------------------------------------------
-// 4. BOARD
+// 3. "NAME'S TURN" — only that character on deck, in the spotlight
 // ------------------------------------------------------------------
-let boardActive = false;
-let hostBarHidden = false;
+let turnSkip = null;
+let player = null; // the character currently on screen
 
-function updateScoreboards(instant = false) {
-  if (!characters.length) return;
-  [0, 1].forEach((t) => {
-    scoreboards[t].setTeam(teamName(t), teamColor(t), teamChars(t).map((c) => stickers[c.data.id]));
-    scoreboards[t].setScore(game.scores[t], instant);
-    scoreboards[t].setActive(game.phase === 'board' && game.turn === t);
-  });
+function putOnSpot(ch, instant = false) {
+  const [x, z] = spots().turn;
+  ch.target = null;
+  ch.place(x, z, 0.5, 'idle');
+  ch.pop(true, instant);
+  world.setSpotlight(new THREE.Vector3(x, 0, z));
+  player = ch;
 }
 
-function teamPanel(t) {
-  const canAsk = config.settings.askTheBoys;
-  return `<div class="team-panel team-${t} ${game.turn === t && game.phase === 'board' ? 'active' : ''}" style="--team:${teamColor(t)}" data-team="${t}">
-    <div class="tp-name">${esc(teamName(t))}</div>
-    <div class="tp-score" data-score="${t}">${game.scores[t]}</div>
-    <div class="tp-stickers">${teamChars(t).map((c) => stickerImg(c, 'xs')).join('')}</div>
-    ${canAsk ? `<div class="tp-ask ${game.askUsed[t] ? 'used' : ''}" title="Ask the Boys">🎤 ${game.askUsed[t] ? 'hint used' : 'hint ready'}</div>` : ''}
-  </div>`;
-}
-
-function hostBar(buttons) {
-  return `<div class="host-bar ${hostBarHidden ? 'hidden' : ''}">${buttons.map(([act, label, key, cls = '']) => `<button class="hb ${cls}" data-act="${act}">${label}${key ? `<kbd>${key}</kbd>` : ''}</button>`).join('')}</div>`;
-}
-
-function showBoard() {
+async function startTurn(splashIntro = true) {
   game.phase = 'board';
-  boardActive = true;
-  board.clearSelection();
-  board.setUsed(game.used);
+  game.current = null;
+  persist();
+  clearGuests();
+  if (G.remaining(game) === 0) return config.settings.finalSplash ? showFinalIntro() : showResults();
   world.setParty((25 - G.remaining(game)) / 25);
-  updateScoreboards();
-  rig.shot(...shots.boardWide(), 1.8);
-  characters.forEach((c) => { if (c.state === 'sleep') c.setState('idle'); });
-  updateGloom();
-  const left = G.remaining(game);
-  const done = left === 0;
+  const team = game.turn;
+  const ch = activeGirl(team);
+  showOnly([ch]);
+  putOnSpot(ch);
+  characters.forEach((c) => c.showName(false));
+  if (!splashIntro) {
+    turnShot(ch, 'board', 0.8);
+    return showBoardPanel();
+  }
+  turnShot(ch, 'close', 1.6);
+  setTimeout(() => { ch.react('cheer', 2.0); confetti.burst(sw(ch.root.position.x, 2.2, ch.root.position.z), 90, { up: 7 }); }, 500);
+  sfx('fanfare');
+  const name = ch.data.name.toUpperCase();
   const n = setScreen(`
-    <div class="hud-top">
-      ${teamPanel(0)}
-      <div class="hud-center">
-        <div class="round-chip">${done ? 'BOARD CLEARED!' : 'ROUND 1'}</div>
-        <div class="turn-banner" style="--team:${teamColor(game.turn)}">${done ? '🌊 Time for the Final Splash' : `${esc(teamName(game.turn).replace(/^TEAM\s+/i, ''))} PICKS`}</div>
-        <div class="remaining">${left} question${left === 1 ? '' : 's'} remaining</div>
-      </div>
-      ${teamPanel(1)}
+    <div class="turn-scores">${teamChip(0, { compact: true })}${teamChip(1, { compact: true })}</div>
+    <div class="turn-splash" style="--team:${teamColor(team)}">
+      <div class="ts-kicker">${esc(teamName(team))}</div>
+      <div class="ts-name">${esc(name)}’S</div>
+      <div class="ts-turn">TURN!</div>
+      <div class="ts-sub">${G.remaining(game)} questions left · tap to continue</div>
     </div>
-    ${done ? `<div class="bottom-actions"><button class="btn btn-play" data-act="final">${config.settings.finalSplash ? '🌊 THE FINAL SPLASH' : '🏆 SEE RESULTS'}</button></div>` : '<div class="board-hint">Click a tile to choose a question</div>'}
-    ${hostBar([
-      ['undo', '↶ Undo', 'Z'],
-      ['adj', '± Adjust scores', ''],
-      ['final', config.settings.finalSplash ? '🌊 Final Splash' : '🏆 End game', ''],
-      ['menu', '⌂ Menu', ''],
-    ])}
+  `, 'screen-turn');
+  let done = false;
+  const go = () => {
+    if (done) return;
+    done = true;
+    turnSkip = null;
+    turnShot(ch, 'board', 1.2);
+    showBoardPanel();
+  };
+  turnSkip = go;
+  n.addEventListener('click', go);
+  await wait(2600);
+  go();
+}
+
+// ------------------------------------------------------------------
+// 4. THE TRIVIA BOARD — a glass panel over the yacht
+// ------------------------------------------------------------------
+let boardScreen = null;
+
+function showBoardPanel() {
+  game.phase = 'board';
+  const team = game.turn;
+  const ch = player || activeGirl(team);
+  const s = config.settings;
+  const cats = config.categories;
+  const left = G.remaining(game);
+  boardScreen = setScreen(`
+    ${playerPlate(ch, team, 'your pick!')}
+    <div class="trivia-panel">
+      <div class="tp-header">
+        ${teamChip(0)}
+        <div class="tp-center">
+          <div class="tp-picks" style="--team:${teamColor(team)}">${stickerImg(ch, 'sm')} ${esc(ch.data.name.toUpperCase())} PICKS</div>
+          <div class="tp-left">${left} question${left === 1 ? '' : 's'} left</div>
+        </div>
+        ${teamChip(1)}
+      </div>
+      <div class="tp-grid">
+        ${cats.map((c, ci) => `<div class="tp-cat" style="--cat:${c.color}"><span class="tp-cat-icon">${esc(c.icon)}</span><span class="tp-cat-name">${esc(c.name)}</span></div>`).join('')}
+        ${POINTS.map((p, r) => cats.map((c, ci) => {
+          const key = `${ci}-${r}`;
+          const used = game.used[key];
+          const dbl = s.doubleTrouble && key === game.doubleKey && !used;
+          return `<button class="tile ${used ? 'used' : ''} ${dbl ? 'sparkle' : ''}" style="--cat:${c.color}; --i:${r * 5 + ci}" data-c="${ci}" data-r="${r}" ${used ? 'disabled' : ''}>${used ? '' : p}</button>`;
+        }).join('')).join('')}
+      </div>
+    </div>
+    ${hostBar([['undo', '↶ Undo', 'Z'], ['adj', '± Adjust scores', ''], ['final', s.finalSplash ? '🌊 Final Splash' : '🏆 End game', ''], ['menu', '⌂ Menu', '']])}
   `, 'screen-board');
-  n.addEventListener('click', (e) => {
+  boardScreen.addEventListener('click', (e) => {
+    const tile = e.target.closest('.tile:not(.used)');
+    if (tile) return chooseTile(+tile.dataset.c, +tile.dataset.r, tile);
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
     sfx('click');
     if (a === 'undo') doUndo();
-    if (a === 'final') { boardActive = false; config.settings.finalSplash ? showFinalIntro() : showResults(); }
-    if (a === 'menu') { boardActive = false; persist(); showMenu(); }
+    if (a === 'final') config.settings.finalSplash ? showFinalIntro() : showResults();
+    if (a === 'menu') { persist(); showMenu(); }
     if (a === 'adj') showAdjust();
   });
+  boardScreen.querySelectorAll('.tile:not(.used)').forEach((t) => t.addEventListener('mouseenter', () => sfx('hover')));
+  ch.react('wave', 1.6);
   persist();
 }
 
 function doUndo() {
   if (game.phase !== 'board') return;
-  if (G.undo(game)) {
-    toast('↶ Undone!', 'small');
-    board.setUsed(game.used);
-    updateScoreboards();
-    showBoard();
-  } else toast('Nothing to undo', 'small');
+  if (G.undo(game)) { toast('↶ Undone!', 'small'); startTurn(false); } else toast('Nothing to undo', 'small');
 }
 
 function showAdjust() {
@@ -547,109 +640,45 @@ function showAdjust() {
     if (b) {
       G.adjustScore(game, +b.dataset.t, +b.dataset.d);
       n.querySelector(`[data-s="${b.dataset.t}"]`).textContent = game.scores[b.dataset.t];
-      updateScoreboards();
       persist();
       sfx('pop');
     }
-    if (e.target === n || e.target.dataset.close !== undefined) { n.remove(); showBoard(); }
+    if (e.target === n || e.target.dataset.close !== undefined) { n.remove(); showBoardPanel(); }
   });
   document.body.appendChild(n);
 }
 
-// pointer picking on the 3D board
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-let pointerMoved = 0;
-canvas.addEventListener('pointermove', (e) => {
-  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  if (!boardActive || game.phase !== 'board' || board.selected) return;
-  raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObjects(board.tileMeshes(), false)[0];
-  const tile = hit?.object || null;
-  if (tile !== board.hovered && tile) sfx('hover');
-  board.hover(tile);
-  canvas.style.cursor = tile ? 'pointer' : 'default';
-});
-canvas.addEventListener('click', (e) => {
-  if (!boardActive || game.phase !== 'board' || board.selected) return;
-  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObjects(board.tileMeshes(), false)[0];
-  if (hit) chooseTile(hit.object);
-});
-
 // ------------------------------------------------------------------
-// 5. QUESTION REVEAL — five-second cinematic
+// 5. QUESTION REVEAL — tile flip, category moment, card flies in
 // ------------------------------------------------------------------
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function chooseTile(tile) {
-  const { c, r } = tile.userData;
+async function chooseTile(c, r, tileEl) {
+  if (game.phase !== 'board' || game.current) return;
   const cur = G.pickTile(game, c, r);
   if (!cur) return;
-  boardActive = false;
-  canvas.style.cursor = 'default';
-  board.hover(null);
-  board.select(tile);
   persist();
-  ui.innerHTML = '';
-  ui.appendChild(globalButtons());
+  sfx('pop');
+  tileEl.classList.add('picked');
+  boardScreen?.querySelectorAll('.tile').forEach((t) => { if (t !== tileEl) t.classList.add('dim'); });
+  await wait(750);
   const cat = config.categories[c];
   const q = config.questions[c][r];
-  const anim = config.settings.animations;
-
-  // 0–1s: tile lights up, neighbours dim
-  sfx('pop');
-  const tileWorld = tile.getWorldPosition(new THREE.Vector3());
-  const boardFwd = sw(0, 0, -1).sub(sw(0, 0, 0)).normalize();
-  if (anim) rig.shot(tileWorld.clone().addScaledVector(boardFwd, 9).add(new THREE.Vector3(0, 0.6, 0)), tileWorld, 1.0, 'out');
-  await wait(anim ? 1000 : 300);
-
-  // 1–2s: camera launches into the board
-  if (anim) {
+  if (config.settings.animations) {
+    boardScreen?.querySelector('.trivia-panel')?.classList.add('leaving');
+    boardScreen?.querySelector('.player-plate')?.classList.add('leaving');
     sfx('whoosh');
-    await rig.shot(tileWorld.clone().addScaledVector(boardFwd, 0.6), tileWorld, 0.9, 'in');
+    await characterMoment(cat, q, player);
   }
-
-  // 2–3.5s: character moment with the category prop
-  if (anim) {
-    await characterMoment(cat, q, cur);
-  }
-
-  // 3.5–5s: the question card flies in
-  rig.shot(...shots.boardWide(), 1.4);
   if (cur.double) await doubleTrouble();
   showQuestion();
 }
 
-async function characterMoment(cat, q, cur) {
-  // Who reacts? The boy the question is about, otherwise someone from the picking team.
-  let star = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
-  if (!star) {
-    const pool = teamChars(cur.picker);
-    star = cat.id === 'boys' || cat.id === 'lore' ? pool.find((c) => c.data.role === 'boy') : pool[Math.floor(Math.random() * pool.length)];
-  }
-  star = star || characters[0];
-  const p = star.root.getWorldPosition(new THREE.Vector3());
-  // Shoot from the open middle of the deck toward the character, who turns to camera.
-  const local = star.root.position;
-  const dir = new THREE.Vector3(-local.x * 0.8, 0, -2.4 - local.z).normalize();
-  const camLocal = local.clone().addScaledVector(dir, 3.3).add(new THREE.Vector3(0, 1.75, 0));
-  const camPos = sw(camLocal.x, camLocal.y, camLocal.z);
-  const look = p.clone().add(new THREE.Vector3(0, 1.3, 0));
-  const toCam = camPos.clone().sub(p).setY(0).normalize();
-  const prevFacing = star.targetFacing;
-  star.faceTowards(camLocal.x, camLocal.z);
-  setTimeout(() => { if (star.state !== 'walk') star.targetFacing = prevFacing; }, 3200);
-
+async function characterMoment(cat, q, ch) {
+  const p = ch.root.position;
   if (cat.transition === 'dive') {
-    // camera dives to the water beside the hull and pops back up
-    const water = sw(9, 0, -6);
+    const water = sw(9.5, 0, -4);
     water.y = 0.3;
+    rig.setShift(0);
     rig.cut(water.clone().add(new THREE.Vector3(6, 7, -8)), water);
-    sfx('whoosh');
     await rig.shot(water.clone().add(new THREE.Vector3(1.5, 0.4, -2)), water, 0.6, 'in');
     sfx('splash');
     splash.burst(water.clone(), 140);
@@ -657,27 +686,23 @@ async function characterMoment(cat, q, cur) {
     prop.group.position.copy(water).add(new THREE.Vector3(0, 0.05, 0));
     addProp(prop);
     rig.shake(0.5);
-    await wait(300);
-    rig.shot(camPos, look, 0.6, 'out');
-    star.react(q.subject ? 'point' : 'surprise', 1.6);
-    await wait(650);
+    await wait(350);
+    turnShot(ch, 'close', 0.6);
+    ch.react('surprise', 1.4);
+    await wait(700);
     return;
   }
-
-  rig.cut(camPos.clone().add(new THREE.Vector3(0, 0.6, 0)).addScaledVector(toCam, 1.5), look);
-  rig.shot(camPos, look, 1.4, 'out');
+  await turnShot(ch, 'close', 0.7);
+  const toCam = rig.pos.clone().sub(ch.root.getWorldPosition(new THREE.Vector3())).setY(0).normalize();
+  const side = new THREE.Vector3(-toCam.z, 0, toCam.x);
   const prop = makeCategoryProp(cat.transition, cat.color);
-  const side = new THREE.Vector3(-toCam.z, 0, toCam.x).multiplyScalar(local.x > 0 ? -1 : 1);
-  const propPos = p.clone().addScaledVector(toCam, 1.4).addScaledVector(side, 1.0).add(new THREE.Vector3(0, 1.3, 0));
+  const propPos = ch.root.getWorldPosition(new THREE.Vector3()).addScaledVector(toCam, 1.3).addScaledVector(side, 1.0).add(new THREE.Vector3(0, 1.3, 0));
   prop.group.position.copy(propPos);
-  prop.group.lookAt(camPos.x, propPos.y, camPos.z);
-  prop.group.scale.setScalar(0.6);
+  prop.group.lookAt(rig.pos.x, propPos.y, rig.pos.z);
+  prop.group.scale.setScalar(0.55);
   addProp(prop);
-  const soundFor = { album: 'page', chest: 'chest', heart: 'heart', wheel: 'wheel' };
-  sfx(soundFor[cat.transition] || 'pop');
-  const reaction = q.subject ? 'point' : q.funny ? 'laugh' : ['surprise', 'cheer', 'point'][Math.floor(Math.random() * 3)];
-  star.react(reaction, 1.8);
-  if (q.subject) star.showEmote('point', 1.5);
+  sfx({ album: 'page', chest: 'chest', heart: 'heart', wheel: 'wheel' }[cat.transition] || 'pop');
+  ch.react(q.funny ? 'laugh' : ['surprise', 'cheer', 'point'][Math.floor(Math.random() * 3)], 1.8);
   await wait(1500);
 }
 
@@ -692,19 +717,18 @@ async function doubleTrouble() {
   rig.shake(0.35);
   const n = el(`<div class="double-trouble"><div class="dt-inner"><div class="dt-small">✨ SURPRISE ✨</div><div class="dt-big">DOUBLE TROUBLE!</div><div class="dt-small">This question is worth DOUBLE points</div></div></div>`);
   document.body.appendChild(n);
-  characters.forEach((c) => c.react('surprise', 1));
-  confetti.burst(sw(0, 7, 4), 160, { up: 6 });
+  player?.react('surprise', 1);
+  if (player) confetti.burst(sw(player.root.position.x, 2.5, player.root.position.z), 160, { up: 6 });
   await wait(2300);
   n.classList.add('out');
   setTimeout(() => n.remove(), 500);
 }
 
 // ------------------------------------------------------------------
-// 6. QUESTION SCREEN + host scoring
+// 6. QUESTION + host scoring
 // ------------------------------------------------------------------
 let timer = null;
 let qScreen = null;
-let sleepyTimeout = null;
 
 function startTimer(seconds) {
   stopTimer();
@@ -723,6 +747,7 @@ function startTimer(seconds) {
         sfx('timesup');
         qScreen?.querySelector('.q-timer')?.classList.add('done');
         toast("⏰ TIME'S UP!", 'warn', 1400);
+        player?.react('surprise', 1.2);
       }
     }
     if (timer.left > 0 || timer.paused) timer.raf = requestAnimationFrame(tick);
@@ -743,6 +768,23 @@ function renderTimer() {
   t.classList.toggle('paused', timer.paused);
 }
 
+/** A boy pops onto deck next to the player (question about him, or Ask the Boys). */
+function addGuest(boy, slot = 0, pose = 'point', emote = null) {
+  if (!boy || guests.includes(boy)) return;
+  const [x, z] = spots().turn;
+  boy.target = null;
+  boy.place(x + 1.4 + slot * 1.1, z + 0.4 - slot * 0.6, 0, 'idle');
+  boy.faceTowards(rig.pos.x, rig.pos.z);
+  boy.pop(true);
+  boy.react(pose, 3);
+  if (emote) boy.showEmote(emote, 3);
+  guests.push(boy);
+}
+function clearGuests() {
+  for (const g of guests) if (g !== player) g.pop(false);
+  guests = [];
+}
+
 async function showQuestion() {
   const cur = game.current;
   const cat = config.categories[cur.c];
@@ -750,20 +792,23 @@ async function showQuestion() {
   const imgURL = q.image ? await mediaURL(q.image) : null;
   const format = imgURL ? q.format || 'image' : 'text';
   const subject = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
+  turnShot(player, 'board', 1.0);
   qScreen = setScreen(`
-    <div class="q-backdrop"></div>
-    <div class="hud-top slim">${teamPanel(0)}<div class="hud-center"></div>${teamPanel(1)}</div>
-    <div class="q-card fmt-${format} ${cur.double ? 'is-double' : ''}" style="--cat:${cat.color}">
-      <div class="q-head">
-        <span class="q-chip">${esc(cat.icon)} ${esc(cat.name)}</span>
-        <span class="q-chip q-points">${cur.points} POINTS${cur.double ? ' · ×2' : ''}</span>
-        <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
+    ${playerPlate(player, cur.answering, 'answering')}
+    <div class="trivia-panel question-mode">
+      <div class="q-card in-panel fmt-${format} ${cur.double ? 'is-double' : ''}" style="--cat:${cat.color}">
+        <div class="q-head">
+          <span class="q-chip">${esc(cat.icon)} ${esc(cat.name)}</span>
+          <span class="q-chip q-points">${cur.points} POINTS${cur.double ? ' · ×2' : ''}</span>
+          <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
+        </div>
+        ${imgURL ? `<div class="q-image"><img src="${imgURL}" alt=""></div>` : ''}
+        ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title)}</h1>` : ''}
+        ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
+        <div class="q-answering" style="--team:${teamColor(cur.answering)}"><span>${esc(player.data.name)}</span> answers for ${esc(teamName(cur.answering))}!</div>
+        <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer)}</div>${q.explanation ? `<div class="q-explain">${esc(q.explanation)}</div>` : ''}</div>
+        <div class="q-scores">${teamChip(0, { compact: true })}${teamChip(1, { compact: true })}</div>
       </div>
-      ${imgURL ? `<div class="q-image"><img src="${imgURL}" alt=""></div>` : ''}
-      ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title)}</h1>` : ''}
-      ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
-      <div class="q-answering" style="--team:${teamColor(cur.answering)}"><span>${esc(teamName(cur.answering))}</span> answers!</div>
-      <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer)}</div>${q.explanation ? `<div class="q-explain">${esc(q.explanation)}</div>` : ''}</div>
     </div>
     ${hostBar([
       ['reveal', '👁 Reveal answer', 'Space'],
@@ -780,17 +825,10 @@ async function showQuestion() {
     if (a) questionAction(a);
   });
   startTimer(config.settings.timer);
-  // boys react when a question about them appears
-  if (subject) { subject.react('surprise', 1.2); setTimeout(() => subject.react(q.funny ? 'laugh' : 'point', 2), 1200); }
-  if (q.funny) teamChars(1 - cur.answering).filter((c) => c !== subject).slice(0, 2).forEach((c) => setTimeout(() => c.react('laugh', 2), 600 + Math.random() * 800));
-  // someone gets sleepy on a long question
-  clearTimeout(sleepyTimeout);
-  sleepyTimeout = setTimeout(() => {
-    if (game.phase !== 'question') return;
-    const pool = characters.filter((c) => c.state === 'idle' && c !== subject);
-    const sleepy = pool[Math.floor(Math.random() * pool.length)];
-    sleepy?.setState('sleep', 30);
-  }, Math.max(8000, config.settings.timer * 1000 * 0.55));
+  // the boy the question is about pops in and reacts
+  if (subject) {
+    setTimeout(() => { addGuest(subject, 0, q.funny ? 'laugh' : 'point', 'surprise'); sfx('boing'); }, 700);
+  }
 }
 
 function revealAnswer(force = null) {
@@ -813,8 +851,8 @@ async function questionAction(a) {
     if (cur.stolen) return toast('Score this one first!', 'small');
     stopTimer();
     G.cancelQuestion(game);
-    clearTimeout(sleepyTimeout);
-    return showBoard();
+    clearGuests();
+    return startTurn(false);
   }
   const before = [...game.scores];
   if (a === 'correct') {
@@ -835,18 +873,28 @@ async function questionAction(a) {
     if (res.steal) {
       sfx('boing');
       toast(`🏴‍☠️ STEAL!<small>${esc(teamName(1 - res.team))} can answer!</small>`, 'steal', 2000);
+      await wait(1300);
+      // swap the player on deck for the other team's girl
+      const thief = activeGirl(cur.answering);
+      player.pop(false);
+      clearGuests();
+      putOnSpot(thief);
+      thief.react('cheer', 1.4);
+      turnShot(thief, 'board', 0.8);
+      const plate = qScreen.querySelector('.player-plate');
+      plate?.replaceWith(el(playerPlate(thief, cur.answering, 'stealing!')));
       const q = qScreen.querySelector('.q-answering');
       q.style.setProperty('--team', teamColor(cur.answering));
-      q.innerHTML = `<span>${esc(teamName(cur.answering))}</span> can STEAL!`;
+      q.innerHTML = `<span>${esc(thief.data.name)}</span> can STEAL for ${esc(teamName(cur.answering))}!`;
       q.classList.add('steal');
-      refreshTeamPanels();
+      refreshScores();
       startTimer(Math.max(10, Math.round(config.settings.timer / 2)));
       resolving = false;
       return;
     }
     stopTimer();
     revealAnswer(true);
-    refreshTeamPanels();
+    refreshScores();
     await wait(2600);
     resolving = false;
     return endQuestion();
@@ -857,20 +905,18 @@ async function questionAction(a) {
     stopTimer();
     revealAnswer(true);
     sfx('thud');
-    characters.forEach((c) => Math.random() < 0.4 && c.react('sad', 1.5));
+    player?.react('sad', 1.5);
     await wait(2200);
     resolving = false;
     return endQuestion();
   }
 }
 
-function refreshTeamPanels() {
-  if (!qScreen) return;
-  [0, 1].forEach((t) => {
-    const old = qScreen.querySelector(`.team-panel[data-team="${t}"]`);
-    if (old) old.replaceWith(el(teamPanel(t)));
+function refreshScores() {
+  document.querySelectorAll('.team-chip2').forEach((chip) => {
+    const t = +chip.dataset.team;
+    chip.replaceWith(el(teamChip(t, { compact: chip.classList.contains('compact') })));
   });
-  updateScoreboards();
 }
 
 function askTheBoys() {
@@ -878,36 +924,34 @@ function askTheBoys() {
   if (!G.useAskTheBoys(game, team)) return toast(`${esc(teamName(team))} already used their hint!`, 'small');
   persist();
   sfx('fanfare');
-  const boys = teamChars(team).filter((c) => c.data.role === 'boy');
-  boys.forEach((b) => { b.react('point', 3); b.showEmote('think', 3); });
+  teamChars(team).filter((c) => c.data.role === 'boy').forEach((b, i) => addGuest(b, i, 'point', 'think'));
   toast(`🎤 ASK THE BOYS!<br><small>${esc(teamName(team))} may ask ONE boy for a cryptic clue (no giving it away!)</small>`, 'ask', 3500);
-  if (timer) { timer.left = Math.min(timer.total, timer.left + 10); }
-  refreshTeamPanels();
+  if (timer) timer.left = Math.min(timer.total, timer.left + 10);
+  refreshScores();
 }
 
 async function reactCorrect(team, delta, before) {
   sfx('correct');
-  const tc = teamChars(team);
-  tc.forEach((c, i) => setTimeout(() => c.react('cheer', 2.2), i * 80));
-  teamChars(1 - team).forEach((c) => Math.random() < 0.5 && c.react('sad', 1.6));
-  confetti.burst(sw(SIDE[team] * 4.4, 2.8, 0), 220);
+  player?.react('cheer', 2.4);
+  guests.forEach((g) => g.react('cheer', 2));
+  if (player) confetti.burst(sw(player.root.position.x, 2.6, player.root.position.z), 240);
   toast(`<div class="pts" style="--team:${teamColor(team)}">+${delta}</div><div>${esc(teamName(team))}!</div>`, 'score', 1800);
+  refreshScores();
   stickerMood(team, 'jump');
-  refreshTeamPanels();
   checkSwing(before);
   await wait(2400);
 }
 
 function reactWrong(team, delta) {
   sfx('wrong');
-  teamChars(team).forEach((c, i) => setTimeout(() => c.react(i % 3 === 0 ? 'surprise' : 'sad', 2), i * 90));
-  teamChars(1 - team).filter((c) => c.data.role === 'boy').forEach((c) => Math.random() < 0.6 && c.react('laugh', 1.8));
+  player?.react('sad', 2);
+  guests.forEach((g) => g.react('laugh', 1.8));
   stickerMood(team, 'cry');
   if (delta) toast(`<div class="pts neg">${delta}</div><div>${esc(teamName(team))}</div>`, 'score', 1600);
 }
 
 function stickerMood(team, mood) {
-  document.querySelectorAll(`.team-panel[data-team="${team}"] .sticker`).forEach((s, i) => {
+  document.querySelectorAll(`.team-chip2[data-team="${team}"] .sticker, .player-plate .sticker`).forEach((s, i) => {
     s.classList.remove('jump', 'cry');
     void s.offsetWidth;
     s.style.animationDelay = `${i * 0.07}s`;
@@ -923,59 +967,35 @@ function checkSwing(before) {
     setTimeout(() => {
       rig.shake(0.6);
       sfx('boing');
-      characters.forEach((c) => c.state === 'idle' && c.react('surprise', 1.2));
       toast('😱 WHAT A SWING!', 'swing', 1600);
     }, 900);
   }
 }
 
 function endQuestion() {
-  clearTimeout(sleepyTimeout);
-  characters.forEach((c) => { if (c.state === 'sleep') { c.setState('surprise', 0.8); } });
   G.finishQuestion(game);
   persist();
   qScreen = null;
-  showBoard();
-}
-
-// The trailing team gets a little rain cloud (Jackbox-style teasing)
-function updateGloom() {
-  const diff = game.scores[0] - game.scores[1];
-  const loser = Math.abs(diff) >= 600 ? (diff > 0 ? 1 : 0) : -1;
-  gloomClouds.forEach((g) => world.stage.remove(g));
-  gloomClouds = [];
-  if (loser < 0 || game.phase !== 'board') return;
-  const cloud = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: '#7d7f96', roughness: 1 });
-  [[0, 0, 0.55], [0.55, -0.05, 0.42], [-0.55, -0.05, 0.42], [0.25, 0.25, 0.4]].forEach(([x, y, r]) => {
-    const p = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat);
-    p.position.set(x, y, 0);
-    cloud.add(p);
-  });
-  const drops = [];
-  for (let i = 0; i < 10; i++) {
-    const d = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, 0.14, 2, 4), new THREE.MeshBasicMaterial({ color: '#7cc6ff' }));
-    d.position.set((Math.random() - 0.5) * 1.2, -Math.random() * 1.5, (Math.random() - 0.5) * 0.4);
-    cloud.add(d);
-    drops.push(d);
-  }
-  cloud.userData.drops = drops;
-  cloud.position.set(SIDE[loser] * 4.4, 2.9, -0.2);
-  world.stage.add(cloud);
-  gloomClouds.push(cloud);
+  player?.pop(false);
+  clearGuests();
+  setTimeout(() => startTurn(), 350);
 }
 
 // ------------------------------------------------------------------
-// 8b. THE FINAL SPLASH
+// 7. THE FINAL SPLASH
 // ------------------------------------------------------------------
 async function showFinalIntro() {
-  boardActive = false;
   G.startFinal(game);
   persist();
   world.setParty(1);
-  const water = sw(0, 0, -11);
+  world.setSpotlight(null);
+  clearGuests();
+  placeTeams({ instant: true });
+  showAll();
+  rig.setShift(0);
+  const water = sw(0, 0, -16);
   water.y = 0.3;
-  rig.shot(water.clone().add(new THREE.Vector3(4, 2.5, -9)), water.clone().add(new THREE.Vector3(0, 2, 0)), 1.6);
+  rig.shot(water.clone().add(new THREE.Vector3(5, 3, -10)), water.clone().add(new THREE.Vector3(0, 2.5, 0)), 1.6);
   setTimeout(() => { sfx('splash'); splash.burst(water, 160); rig.shake(0.5); }, 1300);
   const n = setScreen(`
     <div class="final-intro">
@@ -991,7 +1011,7 @@ async function showFinalIntro() {
 
 function showWagers() {
   game.final.stage = 'wager';
-  rig.shot(...shots.boardWide(), 1.5);
+  rig.shot(...shots.team(), 1.5);
   const n = setScreen(`
     <div class="top-title"><h2>SECRET WAGERS</h2><p>Each team types a wager (up to their score) while the other team looks away 🙈</p></div>
     <div class="wagers">
@@ -1031,19 +1051,21 @@ async function showFinalQuestion() {
   const imgURL = q.image ? await mediaURL(q.image) : null;
   sfx('whoosh');
   qScreen = setScreen(`
-    <div class="q-backdrop"></div>
-    <div class="q-card final fmt-${imgURL ? 'image' : 'text'}" style="--cat:#0ea5b7">
-      <div class="q-head">
-        <span class="q-chip">🌊 THE FINAL SPLASH</span>
-        <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
-      </div>
-      ${imgURL ? `<div class="q-image"><img src="${imgURL}" alt=""></div>` : ''}
-      <h1 class="q-title">${esc(q.title)}</h1>
-      <div class="q-answering">Both teams write down an answer!</div>
-      <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer)}</div></div>
-      <div class="final-judge hidden">
-        ${[0, 1].map((t) => `<div class="fj-row" style="--team:${teamColor(t)}" data-team="${t}"><span class="fj-name">${esc(teamName(t))}</span><span class="fj-wager">wagered ${game.final.wagers[t]}</span>
-          <button class="btn-mini good" data-res="1" data-t="${t}">✔ Right</button><button class="btn-mini bad" data-res="0" data-t="${t}">✘ Wrong</button></div>`).join('')}
+    <div class="trivia-panel question-mode centered">
+      <div class="q-card in-panel final fmt-${imgURL ? 'image' : 'text'}" style="--cat:#0ea5b7">
+        <div class="q-head">
+          <span class="q-chip">🌊 THE FINAL SPLASH</span>
+          <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
+        </div>
+        ${imgURL ? `<div class="q-image"><img src="${imgURL}" alt=""></div>` : ''}
+        <h1 class="q-title">${esc(q.title)}</h1>
+        <div class="q-answering">Both teams write down an answer!</div>
+        <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer)}</div></div>
+        <div class="q-scores">${teamChip(0, { compact: true })}${teamChip(1, { compact: true })}</div>
+        <div class="final-judge hidden">
+          ${[0, 1].map((t) => `<div class="fj-row" style="--team:${teamColor(t)}" data-team="${t}"><span class="fj-name">${esc(teamName(t))}</span><span class="fj-wager">wagered ${game.final.wagers[t]}</span>
+            <button class="btn-mini good" data-res="1" data-t="${t}">✔ Right</button><button class="btn-mini bad" data-res="0" data-t="${t}">✘ Wrong</button></div>`).join('')}
+        </div>
       </div>
     </div>
     ${hostBar([['freveal', '👁 Reveal answer', 'Space'], ['pause', '⏯ Pause', 'P']])}
@@ -1061,8 +1083,9 @@ async function showFinalQuestion() {
       persist();
       const row = r.closest('.fj-row');
       row.innerHTML = `<span class="fj-name">${esc(teamName(t))}</span><span class="fj-result ${correct ? 'good' : 'bad'}">${correct ? '+' : '−'}${game.final.wagers[t]}</span>`;
-      updateScoreboards();
-      if (correct) reactCorrect(t, game.final.wagers[t], [...game.scores]); else reactWrong(t, -game.final.wagers[t]);
+      refreshScores();
+      teamChars(t).forEach((c) => c.react(correct ? 'cheer' : 'sad', 2));
+      sfx(correct ? 'correct' : 'wrong');
       if (game.final.results.every((x) => x !== null)) {
         await wait(2600);
         game.finalDone = true;
@@ -1079,37 +1102,37 @@ function finalReveal() {
 }
 
 // ------------------------------------------------------------------
-// 8. FINAL RESULTS — Yacht champions
+// 8. YACHT CHAMPIONS
 // ------------------------------------------------------------------
 function showResults() {
   stopTimer();
   game.phase = 'results';
   clearGame();
   world.setParty(1);
-  gloomClouds.forEach((g) => world.stage.remove(g));
-  gloomClouds = [];
+  world.setSpotlight(null);
+  clearGuests();
+  showAll();
+  rig.setShift(0);
   const w = G.winner(game);
   const winners = w >= 0 ? teamChars(w) : characters;
   const losers = w >= 0 ? teamChars(1 - w) : [];
+  const [sx, sz] = spots().start;
   winners.forEach((c, i) => {
-    const x = (i - (winners.length - 1) / 2) * 1.3;
-    c.moveTo(x, -0.6, { face: Math.PI, delay: i * 0.1, speed: 5 });
+    const a = (i / winners.length) * Math.PI * 2 + 0.4;
+    c.moveTo(sx + Math.cos(a) * 1.5, sz + Math.sin(a) * 1.5, { face: Math.PI, delay: i * 0.1, speed: 5, then: 'dance' });
   });
+  const sofa = spots().sofa;
   losers.forEach((c, i) => {
-    const s = i < 2 ? 1 : -1;
-    c.moveTo(s * (6.0 + (i % 2) * 1.0), 0.9 - (i % 2) * 1.4, { face: Math.PI - s * 0.5, delay: 0.3 });
+    const [x, z, dir, seat] = sofa[i % sofa.length];
+    c.moveTo(x, z + (i >= sofa.length ? 0.9 : 0), { face: Math.atan2(dir, 0), delay: 0.3, then: 'sit', seatY: Math.max(0.62, seat) });
   });
-  setTimeout(() => {
-    winners.forEach((c) => c.react('dance', 999));
-    losers.forEach((c) => c.react('sad', 999));
-  }, 1700);
+  setTimeout(() => losers.forEach((c) => c.react('sad', 6)), 2600);
   sfx('fanfare');
   setTimeout(() => sfx('fanfare'), 1500);
-  const rainFn = () => { if (game.phase === 'results') { confetti.rain(sw(0, 2, -0.5), 14, 120); confetti.burst(sw((Math.random() - 0.5) * 6, 1.5, -0.6), 90); setTimeout(rainFn, 1600); } };
+  const rainFn = () => { if (game.phase === 'results') { confetti.rain(sw(0, 2, -2), 14, 120); confetti.burst(sw((Math.random() - 0.5) * 4, 1.5, -2), 90); setTimeout(rainFn, 1600); } };
   setTimeout(rainFn, 1200);
-  rig.shot(sw(0, 4.4, -7.6), sw(0, 1.5, -0.6), 2);
-  // gentle side-to-side swing in front of the dancers (a full orbit would pass through the board)
-  setTimeout(() => { if (game.phase === 'results') rig.startOrbit(sw(0, 0, -0.6), 7, 4.4, 0.5, null, new THREE.Vector3(0, 1.5, 0), 0.6); }, 2100);
+  rig.shot(sw(0, 5.2, -11), sw(0, 1.4, -2), 2);
+  setTimeout(() => { if (game.phase === 'results') rig.startOrbit(sw(0, 0, -2), 9.5, 5, 0.4, Math.PI, new THREE.Vector3(0, 1.4, 0), 0.7); }, 2100);
   const n = setScreen(`
     <div class="results">
       <div class="kicker">${w >= 0 ? '🏆 YACHT CHAMPIONS 🏆' : '🤝 IT’S A TIE! 🤝'}</div>
@@ -1126,11 +1149,30 @@ function showResults() {
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
     sfx('click');
-    characters.forEach((c) => c.setState('idle'));
-    if (a === 'again') { game = G.newGame(); showShuffle(); }
+    if (a === 'again') { game = G.newGame(); showTeams(); }
     if (a === 'menu') { game = G.newGame(); showMenu(); }
   });
 }
+
+// ------------------------------------------------------------------
+// Pointer: the START button on deck
+// ------------------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+function hitStart(e) {
+  if (!menuActive || !world.startPedestal) return false;
+  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const targets = [world.startPedestal, world.startButton, startLabel].filter(Boolean);
+  return raycaster.intersectObjects(targets, false).length > 0;
+}
+canvas.addEventListener('pointermove', (e) => {
+  const h = hitStart(e);
+  if (h !== world.startHover) { world.startHover = h; if (h) sfx('hover'); }
+  canvas.style.cursor = h ? 'pointer' : 'default';
+});
+canvas.addEventListener('click', (e) => { if (hitStart(e)) startGame(); });
 
 // ------------------------------------------------------------------
 // Keyboard (host controls)
@@ -1144,7 +1186,9 @@ window.addEventListener('keydown', (e) => {
     hostBarHidden = !hostBarHidden;
     document.querySelectorAll('.host-bar').forEach((b) => b.classList.toggle('hidden', hostBarHidden));
   }
-  if (game.phase === 'board' && k === 'z') doUndo();
+  if (game.phase === 'menu' && menuActive && (k === 'enter' || k === ' ')) { e.preventDefault(); startGame(); }
+  if (turnSkip && (k === ' ' || k === 'enter')) { e.preventDefault(); turnSkip(); return; }
+  if (game.phase === 'board' && !game.current && k === 'z') doUndo();
   if (game.phase === 'question' && qScreen) {
     const map = { ' ': 'reveal', c: 'correct', x: 'wrong', n: 'skip', b: 'ask', p: 'pause', escape: 'back' };
     if (map[k]) { e.preventDefault(); questionAction(map[k]); }
@@ -1164,15 +1208,16 @@ function loop() {
   world.update(dt);
   env?.update(dt, world.party);
   for (const c of characters) c.update(dt);
+  if (startLabel?.visible) {
+    startLabel.position.y = startLabel.userData.base + Math.sin(world.clock * 2.2) * 0.12;
+    const s = world.startHover ? 1.12 : 1;
+    startLabel.scale.set(3.2 * s, 1.0 * s, 1);
+  }
   props = props.filter((p) => {
     p.t += dt;
     const alive = p.update(p.t, dt);
     if (!alive) scene.remove(p.group);
     return alive;
-  });
-  gloomClouds.forEach((g) => {
-    g.position.y = 2.9 + Math.sin(world.clock * 2) * 0.08;
-    g.userData.drops.forEach((d) => { d.position.y -= dt * 3; if (d.position.y < -1.6) d.position.y = -0.2; });
   });
   confetti.update(dt);
   splash.update(dt);
@@ -1183,7 +1228,6 @@ function loop() {
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
-  // keep the board framed on portrait / narrow screens
   camera.fov = camera.aspect < 1.2 ? 60 : 42;
   rig.fovTarget = camera.fov;
   camera.updateProjectionMatrix();
@@ -1192,7 +1236,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, board };
+window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame };
 
 loop();
 init();
