@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prop Gallery</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #8fd3f0; font-family: system-ui, sans-serif; }
+    #labels { position: fixed; inset: 0; pointer-events: none; }
+    #labels div { position: absolute; transform: translate(-50%, 0); background: #23305e; color: #fff; font-size: 12px; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+    #hint { position: fixed; left: 12px; bottom: 10px; color: #23305e; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="labels"></div>
+  <div id="hint">Sea of Cortez props built in Blender (tools/blender/props.py) · drag to orbit, scroll to zoom</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#9fd8f2');
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 2000);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    scene.add(new THREE.HemisphereLight('#cfe8ff', '#5fc9c0', 1.4));
+    const sun = new THREE.DirectionalLight('#fff3df', 2.6);
+    sun.position.set(40, 60, 30);
+    scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(400, 48), new THREE.MeshStandardMaterial({ color: '#f3ead0' }));
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const gltf = await loader.loadAsync('../public/models/env/props.glb');
+    const items = [...gltf.scene.children];
+    const labels = document.getElementById('labels');
+    const tags = [];
+    let x = 0;
+    items.forEach((o) => {
+      o.traverse((m) => { if (m.isMesh) m.material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }); });
+      const box = new THREE.Box3().setFromObject(o);
+      const w = box.max.x - box.min.x;
+      o.position.set(o.position.x + x - box.min.x, 0, 0);
+      x += w + 6;
+      scene.add(o);
+      const tag = document.createElement('div');
+      tag.textContent = o.name;
+      labels.appendChild(tag);
+      tags.push([tag, o]);
+    });
+    const center = new THREE.Vector3(x / 2, 6, 0);
+    controls.target.copy(center);
+    camera.position.set(x / 2, 30, 70);
+    const v = new THREE.Vector3();
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      renderer.render(scene, camera);
+      for (const [tag, o] of tags) {
+        v.setFromMatrixPosition(o.matrixWorld).project(camera);
+        tag.style.left = `${(v.x + 1) / 2 * innerWidth}px`;
+        tag.style.top = `${(1 - v.y) / 2 * innerHeight + 8}px`;
+      }
+    });
+    window.gallery = { camera, controls, scene };
+  </script>
+</body>
+</html>

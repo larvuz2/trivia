@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "build:env": "python3 tools/blender/build.py all && npm run compress:env",
+    "compress:env": "cd public/models/env && npx -y @gltf-transform/cli@4.1.1 meshopt bay.glb bay.glb && npx -y @gltf-transform/cli@4.1.1 meshopt sierra.glb sierra.glb"
   },
   "repository": {
     "type": "git",

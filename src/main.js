@@ -8,6 +8,7 @@ import { sfx, unlockAudio, startMusic, setAudioEnabled } from './audio.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL } from './storage.js';
 import * as G from './game.js';
 import { openAdmin } from './admin.js';
+import { loadSeaOfCortez } from './environment.js';
 
 // ------------------------------------------------------------------
 // Renderer & world
@@ -18,13 +19,13 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.localClippingEnabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 3000);
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 7000);
 camera.position.set(60, 30, -60);
 const world = new World(renderer);
 const scene = world.scene;
@@ -43,6 +44,7 @@ const scoreboards = [new Scoreboard(0), new Scoreboard(1)];
 let characters = [];
 let props = [];
 let gloomClouds = [];
+let env = null; // Sea of Cortez scenery (Blender assets)
 
 // Team 0 stands on screen-left. The camera looks toward +Z from the stern,
 // so screen-left is +X in stage space.
@@ -69,10 +71,18 @@ async function init() {
   } catch { /* fonts optional */ }
   setLoad(0.1, 'Sailing the yacht into La Paz…');
   try {
-    await world.loadYacht('models/yacht.glb', (p) => setLoad(0.1 + p * 0.75));
+    await world.loadYacht('models/yacht.glb', (p) => setLoad(0.1 + p * 0.65));
   } catch (e) {
     console.warn('Yacht model failed to load, using fallback', e);
     world.buildFallbackYacht();
+  }
+  setLoad(0.8, 'Painting the Sea of Cortez…');
+  try {
+    env = await loadSeaOfCortez(world, (p) => setLoad(0.8 + p * 0.1));
+    env.addHullFoam(world.yachtModel);
+  } catch (e) {
+    console.warn('Sea of Cortez scenery failed to load, using simple islands', e);
+    world.buildBaja();
   }
   setLoad(0.9, 'Hanging the string lights…');
 
@@ -1152,6 +1162,7 @@ const clock = new THREE.Clock();
 function loop() {
   const dt = Math.min(clock.getDelta(), 0.05);
   world.update(dt);
+  env?.update(dt, world.party);
   for (const c of characters) c.update(dt);
   props = props.filter((p) => {
     p.t += dt;
@@ -1181,7 +1192,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { THREE, world, rig, characters: () => characters, game: () => game, board };
+window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, board };
 
 loop();
 init();

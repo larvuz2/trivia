@@ -56,6 +56,35 @@ The host bar at the bottom also has all of these as buttons, plus **Adjust score
 - **Stealing** — if a team misses, the other team gets a shot.
 - Teasing: big lead swings shake the camera; the trailing team gets a little rain cloud; someone falls asleep on long questions; the boy a question is about reacts.
 
+## The Sea of Cortez scenery (built in Blender)
+
+The world around the yacht is generated with Blender scripts in `tools/blender/`:
+
+| Script | What it builds |
+| --- | --- |
+| `bay.py` | The bay: an Espíritu Santo–style terraced red mesa island, the Balandra headland with its white beach, ankle-deep lagoon and sandbar, the Los Arcos granite islet with a golden spit, Los Islotes sea-lion rocks and the mainland desert coast. Also bakes `bay-depth.png` (the water depth map) and `bay-places.json` (where cacti, palms, palapas and boulders go). |
+| `sierra.py` | Layered Sierra de la Giganta ranges around the horizon. |
+| `props.py` | Cardón cacti, desert scrub, fan palms, palapas, a panga, kayakers, El Arco–style granite arch, El Hongo, boulders, pelicans (with flapping wings), sea lions and dolphins. |
+
+Everything is low-poly with baked vertex colors (no textures), matching the toy-like look.
+The water shader colors the sea by the baked depth: sand-bright aqua shallows → turquoise → teal → deep Sea of Cortez blue,
+with caustics, seabed patches, shoreline foam, sun sparkles and a soft horizon haze. The time of day runs from a clear Baja
+afternoon to golden hour to a party night as the board empties.
+
+Life on the water: pangas with foam wakes, kayakers, pelicans that circle and plunge-dive, a dolphin pod, sea lions, and
+white wash around the yacht's hull.
+
+To rebuild the scenery (needs Python 3.13):
+
+```bash
+pip install bpy==5.2.3 pillow numpy
+```
+```bash
+npm run build:env
+```
+
+`tools/gallery.html` (open `/tools/gallery.html` on the dev server) shows all the props side by side.
+
 ## Game Setup (host only)
 
 Click **⚙ Game Setup** on the main menu. Everything saves in the browser as you type.
@@ -75,14 +104,16 @@ Game progress also auto-saves, so a refresh offers **Continue saved game**.
 
 - `public/models/yacht.glb` — the yacht, generated from the concept art with **Tripo v2.5 image-to-3D on fal.ai**,
   then optimized (2048 px WebP textures, 9 MB → 2 MB).
+- `public/models/env/*` — the Sea of Cortez scenery built with the Blender scripts above.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.
-- Everything else (ocean, sky, Baja mountains, islands, characters, board, props, sounds and music) is procedural.
+- Everything else (water and sky shaders, characters, board, deck props, sounds and music) is procedural.
 
 ## Code map
 
 | File | Responsibility |
 | --- | --- |
-| `src/world.js` | Sky, ocean shader, Baja mountains & islands, the yacht, lights, deck props, golden-hour → party blend |
+| `src/world.js` | Sky, Sea of Cortez water shader, lights, the yacht, deck props, day → golden hour → party blend |
+| `src/environment.js` | Loads and places the Blender scenery; pangas, kayaks, pelicans, dolphins, sea lions, foam |
 | `src/characters.js` | Placeholder characters, procedural animation library, `.glb` swap-in, 2D stickers |
 | `src/board.js` | The 3D trivia board and the two scoreboards |
 | `src/fx.js` | Confetti, splashes and the five category cinematic props |

@@ -1,35 +1,47 @@
-// The continuous 3D world: sky, ocean, Baja mountains, the yacht, lights and props.
+// The continuous 3D world: sky, Sea of Cortez water, Baja scenery, the yacht, lights and props.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-const SKY_DAY = {
-  top: new THREE.Color('#7fb8e8'),
-  mid: new THREE.Color('#ffc9a3'),
-  horizon: new THREE.Color('#ffb27a'),
-  sun: new THREE.Color('#fff1c9'),
-};
-const SKY_PARTY = {
-  top: new THREE.Color('#2b2a6b'),
-  mid: new THREE.Color('#9a4f8f'),
-  horizon: new THREE.Color('#ff7f6b'),
-  sun: new THREE.Color('#ffb070'),
-};
+// Time of day keyframes: clear Baja afternoon -> golden hour -> party night.
+// The game drives this with `party` (0 at the start of the board, 1 when it's cleared).
+const C = (h) => new THREE.Color(h);
+const SKY_KEYS = [
+  { at: 0.0, top: C('#1659c9'), mid: C('#4a9ce6'), horizon: C('#cfeaf6'), sun: C('#fff6dc'), sunDir: new THREE.Vector3(0.45, 0.72, -0.53), sunCol: C('#fff3df'), sunI: 3.0, hemiSky: C('#cfe8ff'), hemiGround: C('#5fc9c0'), hemiI: 1.35 },
+  { at: 0.55, top: C('#3a63b8'), mid: C('#e7a98c'), horizon: C('#ffc68f'), sun: C('#ffd9a0'), sunDir: new THREE.Vector3(-0.84, 0.2, 0.5), sunCol: C('#ffc28a'), sunI: 2.5, hemiSky: C('#ffe0c4'), hemiGround: C('#4fb3b8'), hemiI: 1.15 },
+  { at: 1.0, top: C('#1d2160'), mid: C('#7c4590'), horizon: C('#f27a6c'), sun: C('#ffae74'), sunDir: new THREE.Vector3(-0.86, 0.06, 0.5), sunCol: C('#ff8f6b'), sunI: 1.0, hemiSky: C('#9a8cd8'), hemiGround: C('#2a6f8a'), hemiI: 0.85 },
+];
+SKY_KEYS.forEach((k) => k.sunDir.normalize());
+
+function skyAt(p, out) {
+  const a = p < SKY_KEYS[1].at ? SKY_KEYS[0] : SKY_KEYS[1];
+  const b = p < SKY_KEYS[1].at ? SKY_KEYS[1] : SKY_KEYS[2];
+  const t = THREE.MathUtils.smoothstep(p, a.at, b.at);
+  for (const k of ['top', 'mid', 'horizon', 'sun', 'sunCol', 'hemiSky', 'hemiGround']) out[k].copy(a[k]).lerp(b[k], t);
+  out.sunDir.copy(a.sunDir).lerp(b.sunDir, t).normalize();
+  out.sunI = a.sunI + (b.sunI - a.sunI) * t;
+  out.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
+  out.golden = 1 - Math.abs(p - 0.55) / 0.45;
+  out.night = THREE.MathUtils.smoothstep(p, 0.55, 1.0);
+  return out;
+}
+
+export const OCEAN_DOMAIN = 800; // matches tools/blender/bay.py
 
 export class World {
   constructor(renderer) {
     this.renderer = renderer;
     this.scene = new THREE.Scene();
     this.clock = 0;
-    this.party = 0; // 0 = golden hour, 1 = party lights
+    this.party = 0; // 0 = afternoon, 0.55 = golden hour, 1 = party night
     this.partyTarget = 0;
     this.updatables = [];
-
-    this.sunDir = new THREE.Vector3(-0.55, 0.22, 0.8).normalize();
+    this.sky_ = { top: C('#000'), mid: C('#000'), horizon: C('#000'), sun: C('#000'), sunCol: C('#000'), hemiSky: C('#000'), hemiGround: C('#000'), sunDir: new THREE.Vector3(), sunI: 1, hemiI: 1, golden: 0, night: 0 };
+    skyAt(0, this.sky_);
+    this.sunDir = this.sky_.sunDir;
 
     this.buildSky();
     this.buildLights();
     this.buildOcean();
-    this.buildBaja();
     this.buildClouds();
     this.buildBirds();
 
@@ -42,13 +54,14 @@ export class World {
 
   // ---------------- Sky ----------------
   buildSky() {
-    const geo = new THREE.SphereGeometry(1200, 48, 24);
+    const geo = new THREE.SphereGeometry(3000, 48, 24);
+    const k = this.sky_;
     this.skyUniforms = {
-      uTop: { value: SKY_DAY.top.clone() },
-      uMid: { value: SKY_DAY.mid.clone() },
-      uHorizon: { value: SKY_DAY.horizon.clone() },
-      uSun: { value: SKY_DAY.sun.clone() },
-      uSunDir: { value: this.sunDir },
+      uTop: { value: k.top },
+      uMid: { value: k.mid },
+      uHorizon: { value: k.horizon },
+      uSun: { value: k.sun },
+      uSunDir: { value: k.sunDir },
       uParty: { value: 0 },
       uTime: { value: 0 },
     };
@@ -70,33 +83,34 @@ export class World {
         float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,45.164))) * 43758.5453); }
         void main() {
           float h = vDir.y;
-          vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.18, h));
-          col = mix(col, uTop, smoothstep(0.15, 0.7, h));
-          col = mix(col, uHorizon * 0.95, smoothstep(0.0, -0.2, h));
+          vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.16, h));
+          col = mix(col, uTop, smoothstep(0.12, 0.62, h));
+          col = mix(col, uHorizon, smoothstep(0.0, -0.1, h));
           float s = max(dot(normalize(vDir), normalize(uSunDir)), 0.0);
-          col += uSun * pow(s, 8.0) * 0.35;
-          col += uSun * pow(s, 64.0) * 0.6;
-          col = mix(col, vec3(1.0, 0.97, 0.9), smoothstep(0.9965, 0.998, s));
-          // stars when the party starts
-          vec3 g = floor(vDir * 220.0);
-          float st = step(0.9975, hash(g)) * smoothstep(0.15, 0.5, h);
-          col += st * uParty * (0.6 + 0.4 * sin(uTime * 3.0 + hash(g) * 30.0));
+          col += uSun * pow(s, 6.0) * 0.28;
+          col += uSun * pow(s, 48.0) * 0.5;
+          col = mix(col, vec3(1.0, 0.98, 0.92) * 1.6, smoothstep(0.9975, 0.9988, s));
+          vec3 g = floor(vDir * 260.0);
+          float st = step(0.9972, hash(g)) * smoothstep(0.12, 0.45, h);
+          col += st * smoothstep(0.6, 1.0, uParty) * (0.7 + 0.3 * sin(uTime * 3.0 + hash(g) * 30.0));
           gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }`,
     });
     this.sky = new THREE.Mesh(geo, mat);
     this.sky.frustumCulled = false;
     this.sky.renderOrder = -10;
     this.scene.add(this.sky);
-    this.scene.fog = new THREE.Fog(SKY_DAY.horizon.clone(), 220, 900);
+    this.scene.fog = new THREE.Fog(k.horizon.clone(), 380, 1900);
   }
 
   // ---------------- Lights ----------------
   buildLights() {
-    this.hemi = new THREE.HemisphereLight('#ffe7cf', '#4fb3b8', 1.25);
+    this.hemi = new THREE.HemisphereLight('#cfe8ff', '#5fc9c0', 1.35);
     this.scene.add(this.hemi);
 
-    this.sun = new THREE.DirectionalLight('#ffd7a8', 2.6);
+    this.sun = new THREE.DirectionalLight('#fff3df', 3.0);
     this.sun.position.copy(this.sunDir).multiplyScalar(80);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -107,78 +121,175 @@ export class World {
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
 
-    this.fill = new THREE.DirectionalLight('#b9d8ff', 0.6);
+    // a big soft "landscape sun" (no shadows) so far islands and mountains get directional light too
+    this.farSun = new THREE.DirectionalLight('#fff3df', 1.2);
+    this.scene.add(this.farSun);
+
+    this.fill = new THREE.DirectionalLight('#b9d8ff', 0.5);
     this.fill.position.set(30, 25, -40);
     this.scene.add(this.fill);
   }
 
-  // ---------------- Ocean ----------------
+  // ---------------- Sea of Cortez water ----------------
   buildOcean() {
-    const geo = new THREE.PlaneGeometry(2400, 2400, 220, 220);
-    geo.rotateX(-Math.PI / 2);
+    // depth map baked from the Blender bay (tools/blender/bay.py); until it loads, everything is "deep"
+    const blank = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    blank.needsUpdate = true;
     this.oceanUniforms = {
       uTime: { value: 0 },
-      uDeep: { value: new THREE.Color('#0aa3a8') },
-      uShallow: { value: new THREE.Color('#34d4c8') },
-      uFoam: { value: new THREE.Color('#f4fffb') },
-      uHorizon: { value: SKY_DAY.horizon.clone() },
-      uSunDir: { value: this.sunDir },
-      uParty: { value: 0 },
+      uDepth: { value: blank },
+      uDomain: { value: OCEAN_DOMAIN },
+      uDepthMax: { value: 40 },
+      uSand: { value: C('#f3ead0') },
+      uAqua0: { value: C('#b5f5e6') },
+      uAqua1: { value: C('#5fe3d6') },
+      uTurq: { value: C('#16c3c6') },
+      uTeal: { value: C('#0d9cc0') },
+      uBlue: { value: C('#0b68b8') },
+      uDeep: { value: C('#0a3f8f') },
+      uFoam: { value: C('#ffffff') },
+      uSkyHorizon: { value: this.sky_.horizon },
+      uSkyTop: { value: this.sky_.mid },
+      uSunDir: { value: this.sky_.sunDir },
+      uSunCol: { value: this.sky_.sun },
+      uGolden: { value: 0 },
+      uNight: { value: 0 },
+      uFogColor: { value: this.scene.fog.color },
+      uFogNear: { value: this.scene.fog.near },
+      uFogFar: { value: this.scene.fog.far },
     };
-    const mat = new THREE.ShaderMaterial({
-      uniforms: this.oceanUniforms,
-      vertexShader: /* glsl */ `
-        uniform float uTime;
-        varying vec3 vWorld;
-        varying float vH;
-        float wave(vec2 p, vec2 d, float f, float s, float a){ return sin(dot(p, d) * f + uTime * s) * a; }
-        void main(){
-          vec3 p = position;
-          float fade = 1.0 - smoothstep(60.0, 500.0, length(p.xz));
-          float h = wave(p.xz, normalize(vec2(1.0, 0.4)), 0.11, 1.1, 0.45)
-                  + wave(p.xz, normalize(vec2(-0.3, 1.0)), 0.17, 1.6, 0.25)
-                  + wave(p.xz, normalize(vec2(0.7, -0.8)), 0.29, 2.1, 0.12);
-          p.y += h * (0.35 + 0.65 * fade);
-          vH = h;
-          vec4 w = modelMatrix * vec4(p, 1.0);
-          vWorld = w.xyz;
-          gl_Position = projectionMatrix * viewMatrix * w;
-        }`,
-      fragmentShader: /* glsl */ `
-        uniform float uTime, uParty;
-        uniform vec3 uDeep, uShallow, uFoam, uHorizon, uSunDir;
-        varying vec3 vWorld;
-        varying float vH;
-        vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3))); return -1.0 + 2.0*fract(sin(p)*43758.5453); }
-        float noise(vec2 p){
-          vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
-          return mix(mix(dot(hash2(i), f), dot(hash2(i+vec2(1,0)), f-vec2(1,0)), u.x),
-                     mix(dot(hash2(i+vec2(0,1)), f-vec2(0,1)), dot(hash2(i+vec2(1,1)), f-vec2(1,1)), u.x), u.y);
-        }
-        void main(){
-          vec3 col = mix(uDeep, uShallow, smoothstep(-0.5, 0.6, vH));
-          // stylized foam squiggles like the reference art
-          vec2 q = vWorld.xz * 0.09;
-          float n = noise(q + vec2(uTime * 0.05, uTime * 0.03)) + 0.5 * noise(q * 2.3 - uTime * 0.04);
-          float band = abs(fract(n * 3.0) - 0.5);
-          float foam = smoothstep(0.035, 0.0, band) * smoothstep(-0.2, 0.5, n);
-          float dist = length(vWorld.xz - cameraPosition.xz);
-          foam *= 1.0 - smoothstep(80.0, 260.0, dist);
-          col = mix(col, uFoam, foam * 0.85);
-          // sun glitter
-          vec3 v = normalize(cameraPosition - vWorld);
-          vec3 r = reflect(-normalize(uSunDir), vec3(0.0, 1.0, 0.0));
-          float spec = pow(max(dot(r, v), 0.0), 60.0);
-          col += vec3(1.0, 0.85, 0.6) * spec * 0.6 * (1.0 - uParty * 0.6);
-          col *= 1.0 - uParty * 0.35;
-          // fade to horizon
-          col = mix(col, uHorizon, smoothstep(250.0, 1000.0, dist));
-          gl_FragColor = vec4(col, 1.0);
-        }`,
-    });
-    this.ocean = new THREE.Mesh(geo, mat);
-    this.ocean.position.y = 0;
+    const vertexShader = /* glsl */ `
+      uniform float uTime, uDomain, uDepthMax;
+      uniform sampler2D uDepth;
+      varying vec3 vWorld;
+      varying float vH;
+      varying float vDepth;
+      float depthAt(vec2 xz){
+        vec2 uv = xz / (2.0 * uDomain) + 0.5;
+        if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return uDepthMax;
+        return texture2D(uDepth, uv).r * uDepthMax;
+      }
+      float wave(vec2 p, vec2 d, float f, float s, float a){ return sin(dot(p, d) * f + uTime * s) * a; }
+      void main(){
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        float d = depthAt(w.xz);
+        float r = length(w.xz);
+        float amp = smoothstep(0.3, 6.0, d) * (1.0 - smoothstep(380.0, 560.0, r)) * (0.4 + 0.6 * (1.0 - smoothstep(40.0, 300.0, r)));
+        float h = wave(w.xz, normalize(vec2(1.0, 0.4)), 0.11, 1.1, 0.42)
+                + wave(w.xz, normalize(vec2(-0.3, 1.0)), 0.17, 1.6, 0.22)
+                + wave(w.xz, normalize(vec2(0.7, -0.8)), 0.29, 2.1, 0.1);
+        w.y += h * amp;
+        vH = h * amp;
+        vDepth = d;
+        vWorld = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`;
+    const fragmentShader = /* glsl */ `
+      uniform float uTime, uDomain, uDepthMax, uGolden, uNight, uFogNear, uFogFar;
+      uniform sampler2D uDepth;
+      uniform vec3 uSand, uAqua0, uAqua1, uTurq, uTeal, uBlue, uDeep, uFoam, uSkyHorizon, uSkyTop, uSunDir, uSunCol, uFogColor;
+      varying vec3 vWorld;
+      varying float vH;
+      varying float vDepth;
+      vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3))); return -1.0 + 2.0*fract(sin(p)*43758.5453); }
+      float noise(vec2 p){
+        vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
+        return mix(mix(dot(hash2(i), f), dot(hash2(i+vec2(1,0)), f-vec2(1,0)), u.x),
+                   mix(dot(hash2(i+vec2(0,1)), f-vec2(0,1)), dot(hash2(i+vec2(1,1)), f-vec2(1,1)), u.x), u.y);
+      }
+      float fbm(vec2 p){ return noise(p) * 0.6 + noise(p * 2.1 + 3.1) * 0.3 + noise(p * 4.3 - 1.7) * 0.1; }
+      float depthAt(vec2 xz){
+        vec2 uv = xz / (2.0 * uDomain) + 0.5;
+        if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return uDepthMax;
+        return texture2D(uDepth, uv).r * uDepthMax;
+      }
+      // stylized caustics: thin bright web that drifts
+      float caustics(vec2 p, float t){
+        float c = 0.0;
+        vec2 q = p + vec2(noise(p * 0.5 + t * 0.1), noise(p * 0.5 - t * 0.1)) * 1.5;
+        float a = abs(noise(q + t * 0.25));
+        float b = abs(noise(q * 1.7 - t * 0.2 + 5.0));
+        c = pow(1.0 - smoothstep(0.0, 0.08, a), 2.0) + pow(1.0 - smoothstep(0.0, 0.06, b), 2.0) * 0.6;
+        return c;
+      }
+      void main(){
+        float d = depthAt(vWorld.xz) + noise(vWorld.xz * 0.05) * 0.6;
+        float dist = length(vWorld.xz - cameraPosition.xz);
+        // --- colour by depth: sand -> pale aqua -> turquoise -> teal -> blue -> deep navy ---
+        vec3 col = mix(uSand, uAqua0, smoothstep(0.0, 0.9, d));
+        col = mix(col, uAqua1, smoothstep(0.7, 3.2, d));
+        col = mix(col, uTurq, smoothstep(2.8, 8.5, d));
+        col = mix(col, uTeal, smoothstep(8.0, 16.0, d));
+        col = mix(col, uBlue, smoothstep(14.0, 26.0, d));
+        col = mix(col, uDeep, smoothstep(24.0, 40.0, d));
+        // seabed: dark rock / seagrass patches and sand ripples seen through clear water
+        float patchN = fbm(vWorld.xz * 0.03 + 7.0);
+        float patches = smoothstep(0.12, 0.38, patchN) * smoothstep(1.2, 3.5, d) * (1.0 - smoothstep(9.0, 17.0, d));
+        col = mix(col, col * vec3(0.55, 0.72, 0.78), patches * 0.55);
+        float ripple = sin(vWorld.x * 0.9 + noise(vWorld.xz * 0.2) * 6.0) * 0.5 + 0.5;
+        col += vec3(0.06, 0.07, 0.05) * ripple * (1.0 - smoothstep(0.5, 4.0, d)) * (1.0 - smoothstep(60.0, 180.0, dist));
+        float caus = caustics(vWorld.xz * 0.22, uTime) * (1.0 - smoothstep(3.0, 13.0, d)) * (1.0 - smoothstep(70.0, 260.0, dist));
+        col += vec3(0.75, 1.0, 0.95) * caus * 0.22 * (1.0 - uNight);
+        // ripples normal for lighting
+        vec2 e = vec2(0.6, 0.0);
+        vec2 rp = vWorld.xz * 0.35 + vec2(uTime * 0.35, uTime * 0.22);
+        float n0 = noise(rp);
+        vec3 nrm = normalize(vec3((noise(rp + e.xy) - n0) * -2.2, 1.0, (noise(rp + e.yx) - n0) * -2.2) + vec3(0.0, 0.0, 0.0));
+        vec3 v = normalize(cameraPosition - vWorld);
+        // sky reflection at grazing angles (keeps the horizon soft and hazy)
+        float fres = pow(1.0 - max(dot(v, nrm), 0.0), 5.0);
+        col = mix(col, mix(uSkyTop, uSkyHorizon, 0.35), fres * 0.22 * smoothstep(6.0, 20.0, d));
+        // deep-water stylized foam squiggles (like the concept art)
+        vec2 q = vWorld.xz * 0.075;
+        float fn = noise(q + vec2(uTime * 0.05, uTime * 0.03)) + 0.5 * noise(q * 2.3 - uTime * 0.04);
+        float band = abs(fract(fn * 3.0) - 0.5);
+        float squig = smoothstep(0.03, 0.0, band) * smoothstep(-0.1, 0.5, fn) * smoothstep(5.0, 12.0, d) * (1.0 - smoothstep(90.0, 300.0, dist));
+        col = mix(col, uFoam, squig * 0.45);
+        // shoreline foam: bright rim + bands rolling in
+        float rim = 1.0 - smoothstep(0.0, 0.45, d);
+        float bands = smoothstep(0.82, 0.97, sin(d * 6.5 - uTime * 2.0 + noise(vWorld.xz * 0.15) * 4.0)) * (1.0 - smoothstep(0.3, 1.8, d));
+        float shore = max(rim, bands * 0.75) * (0.75 + 0.25 * noise(vWorld.xz * 0.6 + uTime));
+        col = mix(col, uFoam, clamp(shore, 0.0, 1.0));
+        // sun glint + sparkles
+        vec3 rf = reflect(-normalize(uSunDir), nrm);
+        float sd = max(dot(rf, v), 0.0);
+        col += uSunCol * pow(sd, 90.0) * 0.9;
+        float sparkle = step(0.82, noise(vWorld.xz * 1.3 + uTime * 0.8)) * pow(sd, 6.0) * (1.0 - smoothstep(60.0, 400.0, dist));
+        col += vec3(1.0) * sparkle * 0.9;
+        // golden hour warmth, night darkness
+        col = mix(col, col * vec3(1.12, 0.93, 0.78) + vec3(0.06, 0.02, 0.0), uGolden * 0.45);
+        col = mix(col, col * vec3(0.24, 0.3, 0.52) + vec3(0.02, 0.0, 0.05), uNight * 0.85);
+        // horizon haze (matches scene fog)
+        col = mix(col, uFogColor, smoothstep(uFogNear * 1.8, uFogFar * 1.5, dist) * 0.85);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`;
+    const mat = new THREE.ShaderMaterial({ uniforms: this.oceanUniforms, vertexShader, fragmentShader });
+    this.oceanMat = mat;
+    // dense square around the bay + a flat frame out to the horizon
+    const inner = new THREE.PlaneGeometry(1200, 1200, 300, 300);
+    inner.rotateX(-Math.PI / 2);
+    const shape = new THREE.Shape([new THREE.Vector2(-5000, -5000), new THREE.Vector2(5000, -5000), new THREE.Vector2(5000, 5000), new THREE.Vector2(-5000, 5000)]);
+    shape.holes.push(new THREE.Path([new THREE.Vector2(-600, -600), new THREE.Vector2(-600, 600), new THREE.Vector2(600, 600), new THREE.Vector2(600, -600)]));
+    const outer = new THREE.ShapeGeometry(shape);
+    outer.rotateX(-Math.PI / 2);
+    this.ocean = new THREE.Group();
+    this.ocean.add(new THREE.Mesh(inner, mat), new THREE.Mesh(outer, mat));
+    this.ocean.children.forEach((m) => { m.frustumCulled = false; });
     this.scene.add(this.ocean);
+  }
+
+  setDepthMap(tex, depthMax) {
+    tex.flipY = false;
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+    this.oceanUniforms.uDepth.value = tex;
+    this.oceanUniforms.uDepthMax.value = depthMax;
   }
 
   // ---------------- Baja California mountains & islands ----------------
@@ -582,22 +693,25 @@ export class World {
     this.party += (this.partyTarget - this.party) * Math.min(1, dt * 0.8);
     const p = this.party;
 
-    // sky & light blend: golden hour -> party night
+    // time of day: afternoon -> golden hour -> party night
+    const k = skyAt(p, this.sky_);
     const u = this.skyUniforms;
     u.uTime.value = t;
     u.uParty.value = p;
-    u.uTop.value.copy(SKY_DAY.top).lerp(SKY_PARTY.top, p);
-    u.uMid.value.copy(SKY_DAY.mid).lerp(SKY_PARTY.mid, p);
-    u.uHorizon.value.copy(SKY_DAY.horizon).lerp(SKY_PARTY.horizon, p);
-    u.uSun.value.copy(SKY_DAY.sun).lerp(SKY_PARTY.sun, p);
-    this.scene.fog.color.copy(u.uHorizon.value);
-    this.oceanUniforms.uHorizon.value.copy(u.uHorizon.value);
-    this.oceanUniforms.uTime.value = t;
-    this.oceanUniforms.uParty.value = p;
-    this.sun.intensity = 2.6 - p * 1.6;
-    this.hemi.intensity = 1.25 - p * 0.45;
-    this.sun.color.set('#ffd7a8').lerp(new THREE.Color('#ff9a6b'), p);
-    if (this.cloudMat) this.cloudMat.emissive.set('#ffcfb0').lerp(new THREE.Color('#c86a9c'), p);
+    this.scene.fog.color.copy(k.horizon);
+    const ou = this.oceanUniforms;
+    ou.uTime.value = t;
+    ou.uGolden.value = Math.max(0, k.golden);
+    ou.uNight.value = k.night;
+    this.sun.intensity = k.sunI;
+    this.sun.color.copy(k.sunCol);
+    this.farSun.color.copy(k.sunCol);
+    this.farSun.intensity = k.sunI * 0.45;
+    this.farSun.position.copy(k.sunDir).multiplyScalar(500);
+    this.hemi.intensity = k.hemiI;
+    this.hemi.color.copy(k.hemiSky);
+    this.hemi.groundColor.copy(k.hemiGround);
+    if (this.cloudMat) this.cloudMat.emissive.set('#fff4ea').lerp(_gold.set('#ffb48a'), Math.max(0, k.golden)).lerp(_night.set('#7a4f9a'), k.night);
 
     // yacht bobbing
     this.yacht.position.y = Math.sin(t * 0.8) * 0.18;
@@ -648,6 +762,8 @@ export class World {
 }
 
 const _v = new THREE.Vector3();
+const _gold = new THREE.Color();
+const _night = new THREE.Color();
 
 export function mulberry32(a) {
   return function () {
