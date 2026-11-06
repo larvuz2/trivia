@@ -8,7 +8,7 @@ import { IntroDirector } from './intro.js';
 import { ExploreMode } from './explore.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL, loadCloudConfig } from './storage.js';
 import * as G from './game.js';
-import { POINTS } from './data.js';
+import { POINTS, builtinModel } from './data.js';
 import { openAdmin } from './admin.js';
 import { loadSeaOfCortez } from './environment.js';
 
@@ -129,8 +129,10 @@ function buildCharacters() {
   hangOut(true);
   buildDJ();
   characters.forEach(async (ch) => {
-    if (ch.data.model) {
-      try { await ch.loadModel(await mediaURL(ch.data.model)); } catch (e) { console.warn('model load failed', e); }
+    if (!ch.data.model) ch.builtinSrc = builtinModel(ch.data.name);
+    const url = ch.data.model ? await mediaURL(ch.data.model) : ch.builtinSrc;
+    if (url) {
+      try { await ch.loadModel(url); } catch (e) { console.warn('model load failed', e); }
     }
   });
 }
@@ -207,21 +209,18 @@ const teamName = (t) => config.settings.teamNames[t];
 const teamColor = (t) => config.settings.teamColors[t];
 const activeGirl = (t) => girlOf(G.activeCouple(game, t)) || teamChars(t)[0];
 
-/** Everyone hanging out on deck: DJ, bar stools, lounge, dance floor. */
+/** Everyone hanging out on deck: standing in an arc around center stage, all facing it. */
 function hangOutPlan() {
-  const s = spots();
-  const face = Math.PI;
-  const sofaFace = (dir) => Math.atan2(dir, 0);
-  return [
-    [boyOf(0), s.stools[2][0], s.stools[2][1], face + 0.3, 'sit', s.stools[2][2]],
-    [girlOf(0), s.stools[0][0], s.stools[0][1], face - 0.2, 'sit', s.stools[0][2]],
-    [girlOf(1), s.stools[1][0], s.stools[1][1], face + 0.15, 'sit', s.stools[1][2]],
-    [boyOf(1), s.bar_lean[0][0], s.bar_lean[0][1], face - 0.6, 'idle'],
-    [girlOf(2), s.sofa[0][0], s.sofa[0][1], sofaFace(s.sofa[0][2]), 'sit', Math.max(0.62, s.sofa[0][3])],
-    [boyOf(2), s.sofa[1][0], s.sofa[1][1], sofaFace(s.sofa[1][2]), 'sit', Math.max(0.62, s.sofa[1][3])],
-    [girlOf(3), s.dance[0][0], s.dance[0][1], face + 0.3, 'dance'],
-    [boyOf(3), s.dance[1][0], s.dance[1][1], face - 0.3, 'dance'],
-  ].filter((p) => p[0]);
+  const [sx, sz] = spots().start;
+  const R = 3.2;
+  // couples side by side, alternating around the arc behind the pedestal (so they face the game camera)
+  const order = [0, 1, 2, 3].flatMap((cp) => [girlOf(cp), boyOf(cp)]);
+  return order.map((ch, i) => {
+    const th = ((i - 3.5) / 3.5) * 1.3; // -75deg .. +75deg, all behind the pedestal (+z)
+    const x = sx + Math.sin(th) * R;
+    const z = sz + Math.cos(th) * R;
+    return [ch, x, z, Math.atan2(sx - x, sz - z), 'idle'];
+  }).filter((p) => p[0]);
 }
 
 function hangOut(instant = false) {
@@ -499,6 +498,8 @@ function openSetup() {
       if (what === 'characters' || what === 'all') {
         characters.forEach((ch, i) => { ch.data = config.characters[i]; ch.refreshLabel(); });
         await refreshStickers();
+        // renaming someone to/from a built-in character (e.g. "Joe") swaps their 3D model
+        if (what === 'characters' && characters.some((ch) => !ch.data.model && (builtinModel(ch.data.name) || null) !== (ch.builtinSrc || null))) buildCharacters();
       }
       if (what === 'model' || what === 'all') buildCharacters();
     },
@@ -1214,10 +1215,11 @@ function showResults() {
     const a = (i / winners.length) * Math.PI * 2 + 0.4;
     c.moveTo(sx + Math.cos(a) * 1.5, sz + Math.sin(a) * 1.5, { face: Math.PI, delay: i * 0.1, speed: 5, then: 'dance' });
   });
-  const sofa = spots().sofa;
   losers.forEach((c, i) => {
-    const [x, z, dir, seat] = sofa[i % sofa.length];
-    c.moveTo(x, z + (i >= sofa.length ? 0.9 : 0), { face: Math.atan2(dir, 0), delay: 0.3, then: 'sit', seatY: Math.max(0.62, seat) });
+    const a = Math.PI * (0.25 + (i / Math.max(1, losers.length - 1)) * 0.5); // behind the winners, facing center stage
+    const x = sx + Math.cos(a) * 3.6;
+    const z = sz + Math.sin(a) * 3.6;
+    c.moveTo(x, z, { face: Math.atan2(sx - x, sz - z), delay: 0.3, speed: 4 });
   });
   setTimeout(() => losers.forEach((c) => c.react('sad', 6)), 2600);
   sfx('fanfare');

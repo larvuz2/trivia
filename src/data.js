@@ -8,6 +8,16 @@ const COLORS = {
   girls: ['#ff6b8b', '#ffb020', '#22c3d6', '#e055c8'],
 };
 
+// Rigged characters that ship with the game (tools/blender/character.py), matched by name.
+// A model uploaded in Setup always wins over these.
+export const BUILTIN_MODELS = {
+  joe: 'models/characters/joe.glb',
+};
+export function builtinModel(name) {
+  return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
+}
+const BOY_NAMES = ['Joe', 'Guy 2', 'Guy 3', 'Guy 4'];
+
 const TAGLINES = {
   boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
   girls: ['The Brains', 'The Trivia Queen', 'The Secret Weapon', 'The Closer'],
@@ -18,7 +28,7 @@ export function defaultCharacters() {
   for (let i = 0; i < 4; i++) {
     chars.push({
       id: `boy${i + 1}`,
-      name: `Guy ${i + 1}`,
+      name: BOY_NAMES[i],
       role: 'boy',
       couple: i,
       tagline: TAGLINES.boys[i],

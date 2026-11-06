@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Character Viewer</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #2f2b45; font-family: system-ui, sans-serif; }
+    #labels { position: fixed; inset: 0; pointer-events: none; }
+    #labels div { position: absolute; transform: translate(-50%, 0); color: #fff; background: rgba(0,0,0,0.45); padding: 2px 10px; border-radius: 99px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="labels"></div>
+  <script type="module">
+    // ?model=joe  — shows the character playing every clip side by side (or the T-pose with ?tpose)
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+    const params = new URLSearchParams(location.search);
+    const name = params.get('model') || 'joe';
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#2f2b45');
+    scene.add(new THREE.HemisphereLight('#ffffff', '#55507a', 1.6));
+    const sun = new THREE.DirectionalLight('#fff3df', 2.4);
+    sun.position.set(3, 6, 6);
+    sun.castShadow = true;
+    scene.add(sun);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 48), new THREE.MeshStandardMaterial({ color: '#3d3858' }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    const gltf = await new GLTFLoader().loadAsync(`../public/models/characters/${name}.glb`);
+    let clips = params.has('tpose') ? [null] : gltf.animations;
+    if (params.get('only')) clips = clips.filter((c) => params.get('only').split(',').includes(c.name));
+    const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 100);
+    const spacing = 1.9;
+    const total = (clips.length - 1) * spacing;
+    const yaw = Number(params.get('yaw') || 0) * Math.PI / 180, dist = total * 0.85 + (params.has('only') ? 4.2 : 6);
+    camera.position.set(Math.sin(yaw) * dist, 1.6, Math.cos(yaw) * dist);
+    camera.lookAt(0, 1.0, 0);
+    const mixers = [];
+    const labels = document.getElementById('labels');
+    clips.forEach((clip, i) => {
+      const o = SkeletonUtils.clone(gltf.scene);
+      o.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+      o.position.x = i * spacing - total / 2;
+      scene.add(o);
+      if (clip) {
+        const mixer = new THREE.AnimationMixer(o);
+        mixer.clipAction(clip).play();
+        mixers.push({ mixer, clip });
+      }
+      const tag = document.createElement('div');
+      tag.textContent = clip ? clip.name : 'T-pose';
+      labels.appendChild(tag);
+      const v = new THREE.Vector3(o.position.x, 2.15, 0).project(camera);
+      tag.style.left = `${(v.x + 1) / 2 * innerWidth}px`;
+      tag.style.top = `${(1 - v.y) / 2 * innerHeight}px`;
+    });
+    // phase in [0,1): every clip shown at the same fraction of its length (deterministic screenshots)
+    window.setPhase = (ph) => { for (const { mixer, clip } of mixers) mixer.setTime(clip.duration * ph); renderer.render(scene, camera); };
+    window.viewer = { scene, camera, gltf };
+    const clock = new THREE.Clock();
+    renderer.setAnimationLoop(() => {
+      if (!window.frozen) for (const { mixer } of mixers) mixer.update(clock.getDelta());
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>

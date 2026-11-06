@@ -176,8 +176,9 @@ npm run build:env
 Click **⚙ Game Setup** on the main menu. Everything saves in the browser as you type.
 
 - **Characters & Couples** — names, roles, couple pairing, colors, face sticker upload, and a `.glb` 3D model upload per person.
-  Placeholder chibi characters are used until a model is uploaded. If the `.glb` contains animation clips named
-  `idle`, `run`/`walk`, `cheer`, `sad`, `laugh`, `dance`, `surprise`, they play automatically.
+  Built-in rigged characters (see below) load automatically by name — whoever is named **Joe** gets Joe's model.
+  Everyone else stays a placeholder chibi until a model is added. An uploaded `.glb` always wins; clips named
+  `idle`, `idle2`, `walk`, `wave`, `dance`, `excited`/`cheer` play automatically.
 - **Categories** — name, icon, color and which 3D transition each column uses.
 - **Questions** — 25 editors: title, private answer, explanation, format (text / image + question / image only),
   image upload, which boy it's about, and a "funny" flag.
@@ -186,8 +187,31 @@ Click **⚙ Game Setup** on the main menu. Everything saves in the browser as yo
 
 Game progress also auto-saves, so a refresh offers **Continue saved game**.
 
+## 3D characters (Tripo → Blender rig → game)
+
+Each person is generated with **Tripo (image-to-3D on fal.ai)** from a T-pose picture, then rigged and animated by
+`tools/blender/character.py`, so every character ends up with:
+
+- the **same height** (2.0 units, feet on the floor, facing forward) and the **same 19-bone skeleton** at the same
+  proportional joint heights — so every animation clip works on every character;
+- a **rigid head**: the face is weighted 100% to the head bone, so the expression never deforms;
+- clips **idle, idle2, excited, dance, wave, walk** (plus a spare `sit`);
+- mid-weight files: full 40k-triangle mesh, 2K color texture, 1K normal + roughness (webp) — about 2 MB each.
+
+```bash
+pip install bpy            # Blender as a Python module
+BLENDER_PY=python3 tools/characters/build.sh joe +x   # tools/characters/joe_tripo.glb -> public/models/characters/joe.glb
+```
+
+`+x` is the direction the raw Tripo model faces. Register new characters in `BUILTIN_MODELS` (`src/data.js`).
+`tools/character-viewer.html?model=joe` (on the dev server) shows every clip side by side.
+
+On deck everyone stands in an arc behind the start pedestal, facing center stage, looping their idles and
+dropping in a wave, a dance or a cheer every few seconds.
+
 ## Assets
 
+- `public/models/characters/*.glb` — rigged characters (Tripo + `tools/blender/character.py`).
 - `public/models/yacht.glb` + `yacht-layout.json` — the party yacht, built with `tools/blender/yacht.py`.
 - `public/models/env/*` — the Sea of Cortez scenery built with the Blender scripts above.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.
@@ -199,7 +223,7 @@ Game progress also auto-saves, so a refresh offers **Continue saved game**.
 | --- | --- |
 | `src/world.js` | Sky, Sea of Cortez water shader, lights, the yacht, deck props, day → golden hour → party blend |
 | `src/environment.js` | Loads and places the Blender scenery; pangas, kayaks, pelicans, dolphins, sea lions, foam |
-| `src/characters.js` | Placeholder characters, procedural animation library, `.glb` swap-in, 2D stickers |
+| `src/characters.js` | Placeholder characters, procedural animation library, `.glb` swap-in + clip playback (idle variety, walk speed), 2D stickers |
 | `src/fx.js` | Confetti, splashes and the five category cinematic props |
 | `src/camera.js` | Camera shots, orbits, shake |
 | `src/game.js` | Rules: teams, turns, scoring, steal, undo, Double Trouble, Final Splash |

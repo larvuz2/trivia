@@ -1,5 +1,5 @@
 // Host-only Setup panel. Everything is saved to the browser as you type.
-import { POINTS, defaultConfig } from './data.js';
+import { POINTS, defaultConfig, builtinModel } from './data.js';
 import { putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame, cloud, onCloudChange, getAdminKey, setAdminKey, checkAdminKey, publishAll, loadCloudConfig, deviceOnlyMedia, pushCloud } from './storage.js';
 import { defaultSticker } from './characters.js';
 
@@ -99,7 +99,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
             <label class="file-btn">🖼 Face sticker<input type="file" accept="image/*" data-up="sticker"></label>
             ${c.sticker ? '<button class="btn-mini" data-clear="sticker">✕ sticker</button>' : ''}
             <label class="file-btn">🧍 3D model (.glb)<input type="file" accept=".glb,.gltf,model/gltf-binary" data-up="model"></label>
-            ${c.model ? '<span class="tag">model ✓</span><button class="btn-mini" data-clear="model">✕ model</button>' : '<span class="tag dim">placeholder</span>'}
+            ${c.model ? '<span class="tag">model ✓</span><button class="btn-mini" data-clear="model">✕ model</button>' : builtinModel(c.name) ? '<span class="tag">built-in model ✓</span>' : '<span class="tag dim">placeholder</span>'}
             <button class="btn-mini" data-preview="${c.id}">▶ wave</button>
           </div>
         </div>`;

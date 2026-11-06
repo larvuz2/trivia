@@ -33,6 +33,11 @@ function normalize(cfg) {
     cfg.settings = { ...def.settings, ...cfg.settings };
     cfg.final = { ...def.final, ...cfg.final };
     cfg.characters = cfg.characters?.length === 8 ? cfg.characters : def.characters;
+    // placeholder names from older saves pick up the new default names (e.g. "Guy 1" -> "Joe")
+    for (const c of cfg.characters) {
+      const d = def.characters.find((x) => x.id === c.id);
+      if (d && /^(Guy|Girl) \d$/.test(c.name || '') && c.name !== d.name) c.name = d.name;
+    }
     cfg.categories = cfg.categories?.length === 5 ? cfg.categories : def.categories;
     cfg.questions = cfg.questions?.length === 5 ? cfg.questions : def.questions;
     return cfg;

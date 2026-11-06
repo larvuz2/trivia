@@ -304,7 +304,8 @@ export class Character {
       this.mixer = new THREE.AnimationMixer(model);
       this.clips = {};
       for (const clip of gltf.animations) this.clips[clip.name.toLowerCase()] = clip;
-      this.playClip('idle');
+      this.currentAction = null;
+      this.setState(this.state, this.stateDur); // models load async: pick up whatever they're doing now
     }
   }
 
@@ -316,21 +317,36 @@ export class Character {
     this.placeholder.visible = true;
   }
 
+  /**
+   * Play the GLB clip for a state. Returns true when a dedicated clip drives the body;
+   * otherwise the idle clip plays and the procedural body motion does the acting.
+   */
   playClip(state) {
-    if (!this.mixer || !this.clips) return;
+    if (!this.mixer || !this.clips) return false;
     const aliases = {
-      idle: ['idle', 'stand'], walk: this.speed < 3.2 ? ['walk', 'run'] : ['run', 'walk'],
-      intro: ['intro', 'pose', 'showoff', 'idle'], move: ['walk', 'run', 'idle'], air: ['jump', 'fall', 'idle'], sit: ['sit'], dj: ['dj', 'dance'], wave: ['wave', 'hello'], cheer: ['cheer', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
-      laugh: ['laugh'], dance: ['dance'], surprise: ['surprise', 'surprised'], sleep: ['sleep', 'idle'], point: ['point', 'wave'], stumble: ['fall', 'trip', 'stumble'],
+      idle: ['idle', 'stand'], walk: ['walk', 'run'], move: ['walk', 'run'],
+      intro: ['intro', 'pose', 'showoff', 'wave'], air: ['jump', 'fall', 'excited'], sit: ['sit'], dj: ['dj', 'dance'],
+      wave: ['wave', 'hello'], cheer: ['cheer', 'excited', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
+      laugh: ['laugh'], dance: ['dance'], surprise: ['surprise', 'surprised'], sleep: ['sleep'], point: ['point', 'wave'],
+      stumble: ['fall', 'trip', 'stumble'],
     };
     const names = aliases[state] || [state];
-    const key = Object.keys(this.clips).find((k) => names.some((n) => k.includes(n)));
-    if (!key) return;
+    const keys = Object.keys(this.clips);
+    let key = null;
+    for (const n of names) {
+      key = keys.find((k) => k === n) || keys.find((k) => k.startsWith(n));
+      if (key) break;
+    }
+    const driven = !!key;
+    if (!key) key = keys.find((k) => k === 'idle') || keys[0];
+    this.clipDriven = driven;
+    this.clipKey = key;
     const action = this.mixer.clipAction(this.clips[key]);
-    if (this.currentAction === action) return;
-    action.reset().fadeIn(0.25).play();
+    if (this.currentAction === action) return driven;
+    action.reset().setEffectiveTimeScale(1).fadeIn(0.25).play();
     this.currentAction?.fadeOut(0.25);
     this.currentAction = action;
+    return driven;
   }
 
   // ---- behaviour API ----
@@ -338,7 +354,11 @@ export class Character {
     this.state = state;
     this.stateTime = 0;
     this.stateDur = dur;
-    this.playClip(state);
+    const seated = this.baseState === 'sit' && state !== 'walk' && state !== 'stumble';
+    if (seated && state !== 'sit' && this.clips) {
+      this.playClip('sit'); // react from the seat: keep the sitting clip, the body bounces procedurally
+      this.clipDriven = false;
+    } else this.playClip(state);
     if (state === 'sleep') this.showEmote('sleep', dur ?? 6);
     if (state === 'sad') this.showEmote('sad', 2.4);
     if (state === 'laugh') this.showEmote('laugh', 2.2);
@@ -422,6 +442,18 @@ export class Character {
 
     switch (this.state) {
       case 'idle': {
+        // standing loop: switch between the two idles and now and then throw in a wave / dance / cheer
+        // (each character on its own random timer so nobody looks like a clone)
+        this.idleSwap = (this.idleSwap ?? 3 + Math.random() * 6) - dt;
+        if (this.idleSwap < 0 && this.baseState === 'idle' && !this.target) {
+          this.idleSwap = 5 + Math.random() * 6;
+          if (Math.random() < 0.4) {
+            const extra = ['wave', 'dance', 'cheer', 'dance'][Math.floor(Math.random() * 4)];
+            this.setState(extra, extra === 'dance' ? 3.2 : 2.0);
+            break;
+          }
+          if (this.clips) this.playClip(this.clipKey === 'idle' && this.clips.idle2 ? 'idle2' : 'idle');
+        }
         b.position.y = Math.abs(Math.sin(T * 1.6)) * 0.03;
         b.rotation.z = Math.sin(T * 0.8) * 0.03;
         headTurn = Math.sin(T * 0.37) * 0.35;
@@ -466,6 +498,7 @@ export class Character {
         footA = Math.sin(cyc) * (0.45 + run * 0.25);
         armLx = -Math.sin(cyc) * (0.5 + run * 0.4);
         armRx = Math.sin(cyc) * (0.5 + run * 0.4);
+        this.currentAction?.setEffectiveTimeScale(Math.min(2.4, 0.6 + this.speed * 0.4));
         break;
       }
       case 'stumble': {
@@ -488,7 +521,7 @@ export class Character {
         }
         if (t >= 1.3) {
           this.saidDizzy = false;
-          if (this.resumeTarget && this.target) { this.resumeTarget = false; this.state = 'walk'; this.stateTime = 0; this.moveDelay = 0; }
+          if (this.resumeTarget && this.target) { this.resumeTarget = false; this.state = 'walk'; this.stateTime = 0; this.moveDelay = 0; this.playClip('walk'); }
           else this.setState('idle');
         }
         break;
@@ -575,6 +608,10 @@ export class Character {
         armLx = -Math.sin(cyc) * (0.5 + run * 0.5) * amt;
         armRx = Math.sin(cyc) * (0.5 + run * 0.5) * amt;
         if (amt < 0.05) { headTurn = Math.sin(T * 0.4) * 0.3; b.position.y = Math.abs(Math.sin(T * 1.6)) * 0.03; }
+        if (this.clips) {
+          this.playClip(sp < 0.3 ? 'idle' : 'walk');
+          if (sp >= 0.3) this.currentAction?.setEffectiveTimeScale(Math.min(2.6, 0.6 + sp * 0.4));
+        }
         break;
       }
       case 'air': {
@@ -584,6 +621,10 @@ export class Character {
         break;
       }
       case 'intro': {
+        if (this.clips) {
+          const seq = ['wave', 'dance', 'excited', 'dance'];
+          this.playClip(seq[Math.floor(t / 2.4) % seq.length]);
+        }
         // placeholder "showing off" loop until the real rigged animation arrives (clip: intro / pose / showoff)
         const beat = T * 4.2;
         const phase = Math.floor(T / 2.6) % 3;
@@ -611,12 +652,24 @@ export class Character {
         break;
     }
 
+    if (this.model && this.clipDriven) {
+      // the GLB clip already animates hips/bob/arms; keep only a forward lean when running
+      const lean = this.state === 'walk' || this.state === 'move' ? b.rotation.x * 0.6 : 0;
+      b.position.set(0, this.state === 'sit' ? this.seatY - 0.5 : 0, 0);
+      b.rotation.set(lean, 0, 0);
+    } else if (this.model && this.baseState === 'sit' && this.state !== 'walk' && this.state !== 'stumble') {
+      // reacting from a seat: a small bounce, not the placeholder's full jump
+      b.position.y *= 0.25;
+      b.rotation.x *= 0.4;
+      b.rotation.z *= 0.4;
+    }
+
     if (this.stateDur != null && this.state !== 'walk' && this.state !== 'stumble' && this.stateTime > this.stateDur) {
       this.setState(this.baseState || 'idle');
     }
     // sitting reactions stay seated
     if (this.baseState === 'sit' && this.state !== 'sit' && this.state !== 'walk' && this.state !== 'stumble') {
-      b.position.y += this.seatY - 0.44;
+      b.position.y += this.seatY - (this.model ? 0.5 : 0.44);
     }
     // pop in/out
     if (this.popScale !== this.popTarget) {
