@@ -75,6 +75,28 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
 The sky slowly turns from afternoon to golden hour to a party night as the board empties, and the yacht's LEDs,
 neon sign, string lights, hot tub and dance floor glow brighter.
 
+## Explore the yacht (physics)
+
+From the main menu press **🕹️** to walk around the yacht as one of the characters. Real physics (Rapier) runs on
+the deck: walk or run into the bar stools and coffee tables to push them over, jump next to the bar to knock the
+bottles off the shelves, shove things with **E**, or click any prop to flick it. Things knocked overboard float.
+
+| Key | |
+| --- | --- |
+| WASD / arrows | walk (camera-relative) |
+| Shift | run |
+| Space | jump |
+| E | shove whatever is in front of you |
+| Click | poke / flick a prop |
+| Drag · Scroll | look around · zoom |
+| Tab | switch character |
+| R | put everything back |
+| Esc | back to the menu (props reset) |
+
+Physics props are tagged in Blender (`dynamic()` in `tools/blender/yacht.py` → glTF extras `{ dyn, mass }`):
+8 stools, 3 tables, 60 bottles, 6 cocktail glasses, the champagne bucket, the fruit bowl and 3 bean bags.
+The rest of the yacht is one static collision mesh. Rapier only downloads when Explore is opened.
+
 ## Host controls (keyboard)
 
 | Key | Action |
@@ -181,6 +203,7 @@ Game progress also auto-saves, so a refresh offers **Continue saved game**.
 | `src/fx.js` | Confetti, splashes and the five category cinematic props |
 | `src/camera.js` | Camera shots, orbits, shake |
 | `src/game.js` | Rules: teams, turns, scoring, steal, undo, Double Trouble, Final Splash |
+| `src/explore.js` | Explore mode: Rapier physics world, character controller, follow camera, push / jump-swipe / shove / poke, impact sounds, floating, reset |
 | `src/intro.js` | Opening cinematic (shots, fades, letterbox, captions, cruising yacht, seagulls) and the character introductions (doors, walk-outs, title cards, finale, START GAME TV) |
 | `src/main.js` | Screens / state machine (deck start button, teams, turns, glass board panel), cinematics, host controls |
 | `src/admin.js` | Setup panel |

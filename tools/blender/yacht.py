@@ -685,6 +685,34 @@ def sofa(c, length, depth, facing, seat_mat='cushion_white', accent=('cushion_co
             cushion((px, y + 0.85, pz), (0.55 if horiz else 0.18, 0.5, 0.18 if horiz else 0.55), accent[i % 2], soft=0.08)
 
 
+# ---------------------------------------------------------------- physics props
+DYN_COUNT = {}
+
+
+def dynamic(kind, shape, mass, fn, *args, **kw):
+    """Build a prop with fn(...) and keep it as its own node the game can simulate:
+    origin at its centre, tagged with a collider shape ('cylinder' | 'ball' | 'box') and a mass (exported as glTF extras)."""
+    n0 = len(PARTS)
+    fn(*args, **kw)
+    new = PARTS[n0:]
+    del PARTS[n0:]
+    if not new:
+        return None
+    select_only(new)
+    if len(new) > 1:
+        bpy.ops.object.join()
+    o = bpy.context.view_layer.objects.active
+    i = DYN_COUNT.get(kind, 0)
+    DYN_COUNT[kind] = i + 1
+    o.name = o.data.name = f'dyn_{kind}_{i}'
+    select_only([o])
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    o['dyn'] = shape
+    o['mass'] = mass
+    NAMED[o.name] = o
+    return o
+
+
 def stool(c):
     x, y, z = c
     cyl((x, y + 0.42, z), 0.05, 0.84, 'chrome', verts=12)
@@ -843,7 +871,7 @@ def bottles(x0, x1, y, z, max_h=0.42, seed=0, kinds=None):
         rmax = max(r for r, _ in prof) * sc
         if x + rmax * 2 > x1:
             break
-        bottle(kind, (x + rmax, y, z + rnd.uniform(-0.03, 0.03)), sc, turn=rnd.uniform(-0.25, 0.25))
+        dynamic('bottle', 'cylinder', 0.9, bottle, kind, (x + rmax, y, z + rnd.uniform(-0.03, 0.03)), sc, turn=rnd.uniform(-0.25, 0.25))
         x += rmax * 2 + rnd.uniform(0.02, 0.06)
         i += 1
 
@@ -932,19 +960,26 @@ def build_party_deck():
 
     # --- stern lounge (U sofa against the transom) + coffee tables ---
     sofa(W(0, 0, -8.0), 8.0, 1.2, '+z')
-    for x in (-1.9, 1.9):
+    def coffee_table(x):
         cyl(W(x, 0.22, -6.4), 0.62, 0.44, 'wood', verts=32, bevel=0.04)
         cyl(W(x, 0.45, -6.4), 0.66, 0.04, 'marble', verts=32, uv=0.8)
+    for x in (-1.9, 1.9):
+        dynamic('table', 'cylinder', 14, coffee_table, x)
     # champagne bucket + glasses on the tables
     cx, cy, cz = W(-1.9, 0.47, -6.4)
-    cyl((cx, cy + 0.2, cz), 0.16, 0.4, 'chrome', verts=18, r2=0.19)
-    cyl((cx + 0.05, cy + 0.5, cz), 0.06, 0.5, 'bottle_green', verts=10)
-    for i, liq in enumerate(['cushion_coral', 'cushion_yellow', 'cushion_pink']):
-        cocktail((cx + 0.35 * math.cos(i * 2.1), cy, cz + 0.35 * math.sin(i * 2.1)), liq)
+    def bucket():
+        cyl((cx, cy + 0.2, cz), 0.16, 0.4, 'chrome', verts=18, r2=0.19)
+        cyl((cx + 0.05, cy + 0.5, cz), 0.06, 0.5, 'bottle_green', verts=10)
+    dynamic('bucket', 'cylinder', 3, bucket)
+    for i, liq in enumerate(['liq_pink', 'liq_gold', 'liq_orange']):
+        dynamic('glass', 'cylinder', 0.3, cocktail, (cx + 0.35 * math.cos(i * 2.1), cy, cz + 0.35 * math.sin(i * 2.1)), liq)
     cx, cy, cz = W(1.9, 0.47, -6.4)
-    sphere((cx, cy + 0.12, cz), 0.3, 'white', scale=(1, 0.4, 1))
-    for i in range(5):
-        sphere((cx + 0.12 * math.cos(i), cy + 0.22, cz + 0.12 * math.sin(i)), 0.09, ['lime', 'cushion_coral', 'cushion_yellow'][i % 3], seg=10, rings=6)
+
+    def fruit_bowl():
+        sphere((cx, cy + 0.12, cz), 0.3, 'white', scale=(1, 0.4, 1))
+        for i in range(5):
+            sphere((cx + 0.12 * math.cos(i), cy + 0.22, cz + 0.12 * math.sin(i)), 0.09, ['lime', 'cushion_coral', 'cushion_yellow'][i % 3], seg=10, rings=6)
+    dynamic('bowl', 'cylinder', 1.5, fruit_bowl)
 
     # --- side lounges along the glass balustrade ---
     for s in (1, -1):
@@ -961,8 +996,8 @@ def build_party_deck():
     cyl(W(bx0 - 0.1, 0.55, bz), 0.36, 1.1, 'fluted', verts=32)
     cyl(W(bx0 - 0.1, 1.13, bz - 0.05), 0.45, 0.08, 'marble', verts=24)
     for i, x in enumerate((2.4, 3.6, 4.8)):
-        stool(W(x, 0, bz - 0.9))
-        cocktail(W(x + 0.1, 1.17, bz - 0.2), ['liq_orange', 'liq_pink', 'liq_gold'][i])
+        dynamic('stool', 'cylinder', 6, stool, W(x, 0, bz - 0.9))
+        dynamic('glass', 'cylinder', 0.3, cocktail, W(x + 0.1, 1.17, bz - 0.2), ['liq_orange', 'liq_pink', 'liq_gold'][i])
     SPOTS['stools'] = [[2.4, bz - 0.9, 0.95], [3.6, bz - 0.9, 0.95], [4.8, bz - 0.9, 0.95]]
     SPOTS['bar_lean'] = [[5.6, bz - 0.95]]
     # back bar with shelves, bottles and the neon sign on the salon wall
@@ -1072,18 +1107,18 @@ def build_flybridge():
     box((-2.0, y + 1.13, -3.65), (4.2, 0.08, 1.0), 'marble', bevel=0.03, uv=0.7)
     box((-2.0, y + 0.08, -3.98), (4.0, 0.05, 0.04), 'led_cyan', bevel=0.01)
     for x in (-3.4, -2.0, -0.6):
-        stool((x, y, -4.6))
+        dynamic('stool', 'cylinder', 6, stool, (x, y, -4.6))
     bottles(-3.6, -0.6, y + 1.17, -3.35, max_h=0.42, seed=11, kinds=['wine', 'champagne', 'tequila', 'rum', 'aperitivo', 'compitas', 'liqueur'])
     # lounge + table under the hardtop
     sofa((3.7, y, -2.0), 4.0, 1.1, '-x', accent=('cushion_yellow', 'cushion_coral'))
-    cyl((2.3, y + 0.3, -2.0), 0.7, 0.6, 'wood', verts=28, bevel=0.03)
+    dynamic('table', 'cylinder', 14, cyl, (2.3, y + 0.3, -2.0), 0.7, 0.6, 'wood', verts=28, bevel=0.03)
     # helm console with the wheel
     box((-2.6, y + 0.6, 0.2), (2.2, 1.2, 0.9), 'hull_white', bevel=0.08)
     box((-2.6, y + 1.25, 0.5), (1.9, 0.08, 0.5), 'screen', bevel=0.02)
     torus((-2.6, y + 1.45, -0.35), 0.38, 0.04, 'walnut', axis='z')
     cyl((-2.6, y + 1.45, -0.3), 0.06, 0.2, 'chrome', axis='z', verts=10)
     for x in (-3.2, -2.0):
-        stool((x, y, -0.9))
+        dynamic('stool', 'cylinder', 6, stool, (x, y, -0.9))
     # plants
     palm_pot((5.3, y, -4.6), 0.8)
     palm_pot((-5.3, y, -6.4), 0.8)
@@ -1100,7 +1135,7 @@ def build_bow():
         quad([(s * 1.7 - 0.6 * s, y + 0.77, 14.0), (s * 1.7 + 0.6 * s, y + 0.77, 14.0), (s * 1.7 + 0.6 * s, y + 0.77, 17.5), (s * 1.7 - 0.6 * s, y + 0.77, 17.5)][::(1 if s > 0 else -1)], 'towel_teal' if s > 0 else 'towel_coral')
     # bean bags
     for i, (x, z, c) in enumerate(((-2.5, 19.5, 'cushion_yellow'), (2.5, 19.5, 'cushion_pink'), (0, 20.4, 'cushion_teal'))):
-        sphere((x, y + 0.42, z), 0.75, c, scale=(1, 0.6, 1))
+        dynamic('beanbag', 'ball', 4, sphere, (x, y + 0.42, z), 0.75, c, scale=(1, 0.6, 1))
     # anchor windlass, cleats
     cyl((0, y + 0.3, 22.0), 0.35, 0.6, 'chrome', verts=20)
     box((0, y + 0.1, 22.8), (0.4, 0.2, 1.2), 'chrome', bevel=0.05)
@@ -1170,7 +1205,7 @@ def build(out_dir):
     build_bow()
     build_floats()
     body = merge_static()
-    print('yacht body polys', len(body.data.polygons), 'materials', len(body.data.materials))
+    print('yacht body polys', len(body.data.polygons), 'materials', len(body.data.materials), 'physics props', DYN_COUNT)
     objs = [body] + list(NAMED.values())
     from common import export_glb
     export_glb(os.path.join(out_dir, '..', 'yacht.glb'), objs)

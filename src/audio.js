@@ -188,6 +188,20 @@ const SFX = {
       o.frequency.linearRampToValueAtTime(1300, t + d + 0.22);
     });
   },
+  clink(t) {
+    const f = 2400 + Math.random() * 1600;
+    tone(f, t, 0.25, { type: 'sine', vol: 0.12, attack: 0.002 });
+    tone(f * 1.52, t, 0.18, { type: 'sine', vol: 0.06, attack: 0.002 });
+    noise(t, 0.05, { vol: 0.08, freq: 6000, q: 1 });
+  },
+  shatter(t) {
+    for (let i = 0; i < 9; i++) tone(2000 + Math.random() * 3500, t + Math.random() * 0.12, 0.12 + Math.random() * 0.15, { type: 'sine', vol: 0.07, attack: 0.002 });
+    noise(t, 0.35, { vol: 0.25, freq: 5000, q: 0.6, type: 'highpass' });
+  },
+  knock(t) { tone(150 + Math.random() * 60, t, 0.14, { type: 'triangle', vol: 0.35, slide: -50 }); noise(t, 0.06, { vol: 0.2, freq: 900, q: 1.2 }); },
+  clank(t) { tone(520 + Math.random() * 200, t, 0.3, { type: 'square', vol: 0.05, attack: 0.002 }); tone(1300, t, 0.2, { type: 'sine', vol: 0.08 }); noise(t, 0.05, { vol: 0.15, freq: 2500, q: 1 }); },
+  plop(t) { tone(260, t, 0.18, { type: 'sine', vol: 0.3, slide: 380 }); noise(t, 0.3, { vol: 0.25, freq: 700, q: 0.5, type: 'lowpass' }); },
+  jump(t) { tone(330, t, 0.16, { type: 'sine', vol: 0.18, slide: 300 }); },
   scratch(t) { noise(t, 0.18, { vol: 0.3, freq: 600, q: 3, sweepTo: 2400 }); noise(t + 0.2, 0.15, { vol: 0.3, freq: 2400, q: 3, sweepTo: 500 }); },
 };
 

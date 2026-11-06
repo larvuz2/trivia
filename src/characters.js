@@ -320,7 +320,7 @@ export class Character {
     if (!this.mixer || !this.clips) return;
     const aliases = {
       idle: ['idle', 'stand'], walk: this.speed < 3.2 ? ['walk', 'run'] : ['run', 'walk'],
-      intro: ['intro', 'pose', 'showoff', 'idle'], sit: ['sit'], dj: ['dj', 'dance'], wave: ['wave', 'hello'], cheer: ['cheer', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
+      intro: ['intro', 'pose', 'showoff', 'idle'], move: ['walk', 'run', 'idle'], air: ['jump', 'fall', 'idle'], sit: ['sit'], dj: ['dj', 'dance'], wave: ['wave', 'hello'], cheer: ['cheer', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
       laugh: ['laugh'], dance: ['dance'], surprise: ['surprise', 'surprised'], sleep: ['sleep', 'idle'], point: ['point', 'wave'], stumble: ['fall', 'trip', 'stumble'],
     };
     const names = aliases[state] || [state];
@@ -561,6 +561,26 @@ export class Character {
         armRx = -1.2 + Math.sin(beat) * 0.15;
         armL = Math.sin(T * 0.9) > 0.6 ? 2.6 : 0.6;
         armLx = Math.sin(T * 0.9) > 0.6 ? 0 : -1.1;
+        break;
+      }
+      case 'move': {
+        // animation only — position is driven from outside (explore mode / physics)
+        const sp = this.moveSpeed || 0;
+        const run = Math.min(1, Math.max(0, (sp - 2.2) / 3));
+        const cyc = T * (7 + run * 8);
+        const amt = Math.min(1, sp / 1.5);
+        b.position.y = Math.abs(Math.sin(cyc)) * (0.07 + run * 0.12) * amt;
+        b.rotation.x = (0.04 + run * 0.16) * amt;
+        footA = Math.sin(cyc) * (0.45 + run * 0.3) * amt;
+        armLx = -Math.sin(cyc) * (0.5 + run * 0.5) * amt;
+        armRx = Math.sin(cyc) * (0.5 + run * 0.5) * amt;
+        if (amt < 0.05) { headTurn = Math.sin(T * 0.4) * 0.3; b.position.y = Math.abs(Math.sin(T * 1.6)) * 0.03; }
+        break;
+      }
+      case 'air': {
+        armL = 2.3; armR = -2.3;
+        footA = 0.6;
+        b.rotation.x = -0.1;
         break;
       }
       case 'intro': {

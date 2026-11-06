@@ -580,3 +580,17 @@ textarea { resize: vertical; }
 .btn.file-btn.btn-secondary { background: linear-gradient(180deg, #2fd3dd, var(--teal)); color: #fff; }
 .loading-sub { font-family: var(--display); color: var(--navy); letter-spacing: 0.3em; font-size: clamp(13px, 1.6vw, 18px); opacity: 0.75; margin-top: 2px; }
 .setup-btn { width: 48px; height: 48px; font-size: 24px; }
+
+/* ---------- Explore mode ---------- */
+.menu-icons { display: flex; gap: 10px; }
+.explore-hud { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+.xh-top { position: absolute; top: 14px; left: 14px; display: flex; gap: 10px; align-items: center; pointer-events: auto; }
+.xh-top .btn { font-size: 16px; padding: 8px 16px; }
+.xh-who { font-family: var(--display); color: #fff; background: rgba(35, 48, 94, 0.75); padding: 8px 16px; border-radius: 99px; font-size: 18px; }
+.xh-help {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); white-space: nowrap;
+  background: rgba(20, 24, 50, 0.6); color: #fff; padding: 8px 18px; border-radius: 99px; font-size: 14px; backdrop-filter: blur(6px);
+}
+.xh-help b { color: var(--gold); font-family: var(--display); font-weight: 400; letter-spacing: 0.5px; }
+.explore-loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; font-family: var(--display); font-size: 28px; color: #fff; background: rgba(35,48,94,0.8); padding: 16px 30px; border-radius: 22px; }
+@media (max-width: 760px) { .xh-help { white-space: normal; width: 92vw; text-align: center; } }

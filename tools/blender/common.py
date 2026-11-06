@@ -131,6 +131,7 @@ def export_glb(path, objs):
         export_vertex_color='ACTIVE',
         export_materials='EXPORT',
         export_yup=True,
+        export_extras=True,  # custom properties -> glTF extras (physics tags)
     )
 
 

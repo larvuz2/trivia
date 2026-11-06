@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/larvuz2/trivia#readme",
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
     "@netlify/blobs": "^8.1.0",
     "three": "^0.170.0"
   },

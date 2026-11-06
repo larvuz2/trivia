@@ -5,6 +5,7 @@ import { Confetti, Splash, makeCategoryProp } from './fx.js';
 import { CameraRig } from './camera.js';
 import { sfx, unlockAudio, startMusic, setAudioEnabled, setMusicState } from './audio.js';
 import { IntroDirector } from './intro.js';
+import { ExploreMode } from './explore.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL, loadCloudConfig } from './storage.js';
 import * as G from './game.js';
 import { POINTS } from './data.js';
@@ -44,6 +45,7 @@ let startLabel = null;
 let guests = []; // boys popped in next to the player (subject / ask the boys)
 let dj = null; // DJ (not a player) — spins at the booth from the cinematic onwards
 let director = null; // opening cinematic + character introductions
+let explore = null; // walk around the yacht with physics
 
 // Team 0 is shown on the left. From the stern camera, screen-left is +X in stage space.
 const SIDE = [1, -1];
@@ -89,6 +91,15 @@ async function init() {
   setLoad(0.92, 'Turning on the dance floor…');
   buildCharacters();
   buildStartLabel();
+  explore = new ExploreMode({
+    world,
+    rig,
+    camera,
+    canvas,
+    splash,
+    characters: () => characters,
+    onExit: () => showMenu(),
+  });
   director = new IntroDirector({
     world,
     env: () => env,
@@ -413,7 +424,10 @@ function showMenu(intro = false) {
       </div>
       <div class="menu-corner">
         ${canContinue ? '<button class="btn btn-secondary" data-act="continue">↻ Continue saved game</button>' : ''}
-        <button class="icon-btn setup-btn" data-act="setup" title="Game Setup" aria-label="Game Setup">⚙</button>
+        <div class="menu-icons">
+          <button class="icon-btn setup-btn" data-act="setup" title="Game Setup" aria-label="Game Setup">⚙</button>
+          <button class="icon-btn setup-btn" data-act="explore" title="Explore the yacht — walk around, push stools, knock bottles!" aria-label="Explore the yacht">🕹️</button>
+        </div>
       </div>
     </div>`, 'screen-menu');
   n.addEventListener('click', (e) => {
@@ -424,6 +438,7 @@ function showMenu(intro = false) {
     sfx('click');
     if (a === 'continue') continueGame();
     if (a === 'setup') openSetup();
+    if (a === 'explore') startExplore();
   });
 }
 
@@ -459,6 +474,18 @@ function continueGame() {
   setMusicState('game');
   placeTeams({ instant: true });
   if (game.phase === 'final') { game.final = null; showFinalIntro(); } else startTurn();
+}
+
+async function startExplore() {
+  if (!menuActive) return;
+  menuActive = false;
+  game.phase = 'explore';
+  world.startHover = false;
+  if (startLabel) startLabel.visible = false;
+  ui.innerHTML = '';
+  ui.appendChild(globalButtons());
+  const first = characters.findIndex((c) => c.data.role === 'girl');
+  await explore.enter(Math.max(0, first));
 }
 
 function openSetup() {
@@ -1233,7 +1260,12 @@ function hitStart(e) {
   const targets = [world.startPedestal, world.startButton, startLabel].filter(Boolean);
   return raycaster.intersectObjects(targets, false).length > 0;
 }
+canvas.addEventListener('pointerdown', (e) => { explore?.onPointerDown(e); });
+window.addEventListener('pointerup', (e) => { explore?.onPointerUp(e); });
+canvas.addEventListener('wheel', (e) => { if (explore?.onWheel(e)) e.preventDefault(); }, { passive: false });
+window.addEventListener('keyup', (e) => { explore?.onKeyUp(e); });
 canvas.addEventListener('pointermove', (e) => {
+  if (explore?.active) { explore.onPointerMove(e); canvas.style.cursor = explore.drag ? 'grabbing' : 'grab'; return; }
   if (director?.active) {
     const hover = director.state === 'final' && director.tv && (() => {
       raycaster.setFromCamera(new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1), camera);
@@ -1247,6 +1279,7 @@ canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = h ? 'pointer' : 'default';
 });
 canvas.addEventListener('click', (e) => {
+  if (explore?.active) return;
   if (director?.onClick(e)) return;
   if (hitStart(e)) startGame();
 });
@@ -1256,6 +1289,7 @@ canvas.addEventListener('click', (e) => {
 // ------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
   if (e.target.matches('input, textarea, select') || document.querySelector('.admin')) return;
+  if (explore?.active) { if (e.key.toLowerCase() === 'f') toggleFullscreen(); explore.onKeyDown(e); return; }
   const k = e.key.toLowerCase();
   if (director?.active) {
     if (k === 'f') toggleFullscreen();
@@ -1290,6 +1324,7 @@ function loop() {
   world.update(dt);
   env?.update(dt, world.party);
   director?.update(dt);
+  explore?.update(dt);
   dj?.update(dt);
   for (const c of characters) c.update(dt);
   if (startLabel?.visible) {
@@ -1320,7 +1355,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, setMaxDt: (v) => { maxDt = v; } };
+window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
 
 loop();
 init();
