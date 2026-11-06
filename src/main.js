@@ -177,10 +177,10 @@ function buildStartLabel() {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   startLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  startLabel.scale.set(3.2, 1.0, 1);
+  startLabel.scale.set(2.9, 0.9, 1);
   startLabel.renderOrder = 30;
   const [x, z] = spots().start;
-  startLabel.position.set(x, 3.0, z);
+  startLabel.position.set(x, 2.15, z);
   startLabel.userData.base = startLabel.position.y;
   world.stage.add(startLabel);
 }
@@ -411,10 +411,9 @@ function showMenu(intro = false) {
         <h1><span>COMPITAS</span><span class="logo-trivia">TRIVIA</span></h1>
         <div class="logo-sub">La Paz 2026</div>
       </div>
-      <div class="start-hint"><span class="sh-dot"></span> Click the glowing <b>START</b> button on the dance floor</div>
       <div class="menu-corner">
         ${canContinue ? '<button class="btn btn-secondary" data-act="continue">↻ Continue saved game</button>' : ''}
-        <button class="btn btn-ghost" data-act="setup">⚙ Game Setup</button>
+        <button class="icon-btn setup-btn" data-act="setup" title="Game Setup" aria-label="Game Setup">⚙</button>
       </div>
     </div>`, 'screen-menu');
   n.addEventListener('click', (e) => {
@@ -1296,7 +1295,7 @@ function loop() {
   if (startLabel?.visible) {
     startLabel.position.y = startLabel.userData.base + Math.sin(world.clock * 2.2) * 0.12;
     const s = world.startHover ? 1.12 : 1;
-    startLabel.scale.set(3.2 * s, 1.0 * s, 1);
+    startLabel.scale.set(2.9 * s, 0.9 * s, 1);
   }
   props = props.filter((p) => {
     p.t += dt;

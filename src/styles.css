@@ -579,3 +579,4 @@ textarea { resize: vertical; }
 .hint.warn { color: #9a6b00; }
 .btn.file-btn.btn-secondary { background: linear-gradient(180deg, #2fd3dd, var(--teal)); color: #fff; }
 .loading-sub { font-family: var(--display); color: var(--navy); letter-spacing: 0.3em; font-size: clamp(13px, 1.6vw, 18px); opacity: 0.75; margin-top: 2px; }
+.setup-btn { width: 48px; height: 48px; font-size: 24px; }
