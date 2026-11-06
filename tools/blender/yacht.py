@@ -54,7 +54,7 @@ def _img(name):
 
 
 def mat(name, color='#ffffff', metal=0.0, rough=0.5, tex=None, normal=None, emit=None, emit_strength=1.0,
-        alpha=1.0, coat=0.0, emit_tex=None):
+        alpha=1.0, coat=0.0, emit_tex=None, normal_strength=0.8):
     if name in MATS:
         return MATS[name]
     m = bpy.data.materials.new(name)
@@ -84,7 +84,7 @@ def mat(name, color='#ffffff', metal=0.0, rough=0.5, tex=None, normal=None, emit
         t.image = _img(normal)
         t.image.colorspace_settings.name = 'Non-Color'
         nm = nt.nodes.new('ShaderNodeNormalMap')
-        nm.inputs['Strength'].default_value = 0.8
+        nm.inputs['Strength'].default_value = normal_strength
         nt.links.new(t.outputs['Color'], nm.inputs['Color'])
         nt.links.new(nm.outputs['Normal'], b.inputs['Normal'])
     if emit:
@@ -110,12 +110,18 @@ def mat(name, color='#ffffff', metal=0.0, rough=0.5, tex=None, normal=None, emit
 
 
 def materials():
-    mat('hull_white', '#f8f6f1', rough=0.22, coat=0.7)
+    mat('hull_white', '#ffffff', rough=0.24, coat=0.7, tex='gelcoat.jpg', normal='gelcoat_n.jpg', normal_strength=0.45)
     mat('hull_navy', '#1d2b5a', rough=0.22, coat=0.7)
     mat('hull_coral', '#ff7a5c', rough=0.3, coat=0.5)
     mat('antifoul', '#c8423a', rough=0.65)
-    mat('white', '#f3f0e9', rough=0.4)
-    mat('cream', '#efe4d0', rough=0.5)
+    mat('white', '#fbf8f2', rough=0.38, tex='gelcoat.jpg', normal='gelcoat_n.jpg', normal_strength=0.45)
+    mat('cream', '#f2e6d2', rough=0.5, tex='gelcoat.jpg', normal='gelcoat_n.jpg', normal_strength=0.45)
+    mat('wood', '#ffffff', rough=0.5, tex='wood.jpg', normal='wood_n.jpg')
+    mat('fluted', '#ffffff', rough=0.42, tex='fluted.jpg', normal='fluted_n.jpg')
+    mat('tolex', '#ffffff', rough=0.75, tex='tolex.jpg', normal='tolex_n.jpg')
+    mat('grille', '#ffffff', rough=0.6, metal=0.3, tex='grille.jpg')
+    mat('leaf', '#ffffff', rough=0.65, tex='leaf.jpg').use_backface_culling = False
+    mat('bark', '#ffffff', rough=0.85, tex='bark.jpg', normal='bark_n.jpg')
     mat('teak', '#ffffff', rough=0.72, tex='teak.jpg', normal='teak_n.jpg')
     mat('walnut', '#ffffff', rough=0.45, tex='walnut.jpg')
     mat('marble', '#ffffff', rough=0.18, tex='marble.jpg')
@@ -125,15 +131,14 @@ def materials():
     mat('glass_clear', '#bfeaf6', rough=0.03, alpha=0.28)
     mat('rubber', '#24242c', rough=0.6)
     mat('leather_navy', '#26336a', rough=0.45)
-    mat('cushion_white', '#f8f2e6', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg')
-    mat('cushion_coral', '#ff7a5c', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg')
-    mat('cushion_teal', '#19b6c4', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg')
-    mat('cushion_yellow', '#ffcd4a', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg')
-    mat('cushion_pink', '#ff7eb6', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg')
+    mat('cushion_white', '#f8f2e6', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg', normal_strength=1.6)
+    mat('cushion_coral', '#ff7a5c', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg', normal_strength=1.6)
+    mat('cushion_teal', '#19b6c4', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg', normal_strength=1.6)
+    mat('cushion_yellow', '#ffcd4a', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg', normal_strength=1.6)
+    mat('cushion_pink', '#ff7eb6', rough=0.85, tex='fabric.jpg', normal='fabric_n.jpg', normal_strength=1.6)
     mat('towel_coral', '#ffffff', rough=0.9, tex='stripe_coral.jpg')
     mat('towel_teal', '#ffffff', rough=0.9, tex='stripe_teal.jpg')
     mat('lifering', '#ffffff', rough=0.5, tex='lifering.jpg')
-    mat('flag', '#ffffff', rough=0.8, tex='flag_mx.jpg')
     mat('name', '#ffffff', rough=0.3, tex='name.jpg')
     mat('neon', '#ffffff', rough=0.4, tex='neon.jpg', emit_tex='neon_e.jpg', emit_strength=2.5)
     mat('dance', '#ffffff', rough=0.2, tex='dance.jpg', emit_tex='dance.jpg', emit_strength=1.4)
@@ -153,7 +158,7 @@ def materials():
     mat('float_yellow', '#ffd23f', rough=0.25, coat=0.8)
     mat('float_sprinkle', '#ffffff', rough=0.4)
     mat('dark', '#1b1d26', rough=0.4)
-    for n in ('white', 'towel_coral', 'towel_teal', 'flag', 'dance', 'glass_clear', 'cushion_coral', 'cushion_yellow', 'cushion_teal', 'cushion_pink', 'cushion_white', 'name', 'neon', 'glass_dark'):
+    for n in ('white', 'towel_coral', 'towel_teal', 'dance', 'glass_clear', 'cushion_coral', 'cushion_yellow', 'cushion_teal', 'cushion_pink', 'cushion_white', 'name', 'neon', 'glass_dark'):
         MATS[n].use_backface_culling = False
     mat('screen', '#59d6ff', emit='#59d6ff', emit_strength=1.2)
     mat('disco', '#e8ecf5', metal=1.0, rough=0.08)
@@ -162,6 +167,11 @@ def materials():
 # ------------------------------------------------------------------ primitives
 PARTS = []     # static parts to be merged
 NAMED = {}     # parts that keep their own node
+
+
+# materials that get world-space box UVs automatically (scale = texture repeats per unit)
+AUTO_UV = {'white': 0.45, 'hull_white': 0.2, 'cream': 0.45, 'wood': 0.7, 'fluted': 0.8, 'tolex': 1.2, 'bark': 1.6,
+           'cushion_white': 0.9, 'cushion_coral': 0.9, 'cushion_teal': 0.9, 'cushion_yellow': 0.9, 'cushion_pink': 0.9}
 
 
 def _finish(o, m, bevel=0.0, seg=2, smooth_angle=35, keep=None, uv=None):
@@ -174,8 +184,11 @@ def _finish(o, m, bevel=0.0, seg=2, smooth_angle=35, keep=None, uv=None):
         md.limit_method = 'ANGLE'
         md.angle_limit = math.radians(40)
         apply_modifiers(o)
+    name = m if isinstance(m, str) else m.name
     if uv:
         box_uv(o, uv)
+    elif name in AUTO_UV and not o.data.uv_layers.get('UVMap_explicit'):
+        box_uv(o, AUTO_UV[name])
     select_only([o])
     try:
         bpy.ops.object.shade_smooth_by_angle(angle=math.radians(smooth_angle))
@@ -533,24 +546,6 @@ def build_stern():
     # paddle boards
     for i, (c, x) in enumerate((('cushion_teal', 3.6), ('cushion_coral', 2.4))):
         sphere((x, 1.0, TRANSOM - 1.7), 0.5, c, scale=(0.55, 0.12, 3.0))
-    # Mexican ensign on a teak staff
-    cyl((-5.9, DECK + 2.3, TRANSOM + 0.6), 0.05, 3.6, 'teak', verts=10)
-    sphere((-5.9, DECK + 4.15, TRANSOM + 0.6), 0.09, 'gold')
-    fv = []
-    ff = []
-    uvs = []
-    nx, ny = 8, 3
-    for j in range(ny + 1):
-        for i in range(nx + 1):
-            u, v = i / nx, j / ny
-            fv.append((-5.9 + 0.02 * math.sin(u * 7), DECK + 3.0 + v * 1.0, TRANSOM + 0.6 - u * 1.65 - 0.05 * math.sin(u * 5)))
-            uvs.append((1 - u, v))
-    for j in range(ny):
-        for i in range(nx):
-            a = j * (nx + 1) + i
-            ff.append((a, a + 1, a + nx + 2, a + nx + 1))
-    o = poly_mesh('flag', fv, ff, 'flag', uvs=uvs, smooth_angle=60)
-    o.data.materials[0].use_backface_culling = False
 
 
 # ------------------------------------------------------------------ superstructure
@@ -702,12 +697,13 @@ def palm_pot(c, scale=1.0):
     cyl((x, y + 0.45 * scale, z), 0.45 * scale, 0.9 * scale, 'pot', verts=20, r2=0.35 * scale, bevel=0.03)
     cyl((x, y + 0.88 * scale, z), 0.4 * scale, 0.04, 'dark', verts=20)
     trunk = [(x + 0.04 * i * i * scale, y + 0.9 * scale + i * 0.42 * scale, z) for i in range(6)]
-    tube(trunk, 0.09 * scale, 'walnut', res=1)
+    tube(trunk, 0.09 * scale, 'bark', res=1)
     tx, ty, tz = trunk[-1]
     for k in range(9):
         a = k / 9 * math.tau + 0.3
         verts = []
         faces = []
+        uvs = []
         n = 7
         for j in range(n + 1):
             t = j / n
@@ -716,10 +712,11 @@ def palm_pot(c, scale=1.0):
             w = 0.36 * scale * math.sin(math.pi * min(1, t * 1.15)) + 0.02
             px, pz = -math.sin(a) * w, math.cos(a) * w
             verts += [(cx + px, cy - 0.08 * scale, cz + pz), (cx, cy + 0.04, cz), (cx - px, cy - 0.08 * scale, cz - pz)]
+            uvs += [(0.0, t), (0.5, t), (1.0, t)]
             if j:
                 b = 3 * (j - 1)
                 faces += [(b, b + 3, b + 4, b + 1), (b + 1, b + 4, b + 5, b + 2)]
-        o = poly_mesh('frond', verts, faces, 'plant' if k % 2 else 'plant_dark', smooth_angle=20)
+        o = poly_mesh('frond', verts, faces, 'leaf', uvs=uvs, smooth_angle=20)
 
 
 def string_lights(a, b, sag, n):
@@ -780,7 +777,7 @@ def build_party_deck():
     # --- stern lounge (U sofa against the transom) + coffee tables ---
     sofa(W(0, 0, -8.0), 8.0, 1.2, '+z')
     for x in (-1.9, 1.9):
-        cyl(W(x, 0.22, -6.4), 0.62, 0.44, 'teak', verts=32, bevel=0.04, uv=0.6)
+        cyl(W(x, 0.22, -6.4), 0.62, 0.44, 'wood', verts=32, bevel=0.04)
         cyl(W(x, 0.45, -6.4), 0.66, 0.04, 'marble', verts=32, uv=0.8)
     # champagne bucket + glasses on the tables
     cx, cy, cz = W(-1.9, 0.47, -6.4)
@@ -800,12 +797,12 @@ def build_party_deck():
 
     # --- the bar (port side, under the flybridge overhang) ---
     bx0, bx1, bz = 1.7, 5.9, 4.6
-    box(W((bx0 + bx1) / 2, 0.55, bz), (bx1 - bx0, 1.1, 0.7), 'walnut', bevel=0.04, uv=0.9)
+    box(W((bx0 + bx1) / 2, 0.55, bz), (bx1 - bx0, 1.1, 0.7), 'fluted', bevel=0.04)
     box(W((bx0 + bx1) / 2, 1.13, bz - 0.05), (bx1 - bx0 + 0.2, 0.08, 0.95), 'marble', bevel=0.03, uv=0.7)
     box(W((bx0 + bx1) / 2, 0.08, bz - 0.36), (bx1 - bx0, 0.05, 0.04), 'led_pink', bevel=0.01)
     box(W((bx0 + bx1) / 2, 0.98, bz - 0.38), (bx1 - bx0, 0.04, 0.04), 'gold', bevel=0.01)
     # rounded bar end
-    cyl(W(bx0 - 0.1, 0.55, bz), 0.36, 1.1, 'walnut', verts=24)
+    cyl(W(bx0 - 0.1, 0.55, bz), 0.36, 1.1, 'fluted', verts=32)
     cyl(W(bx0 - 0.1, 1.13, bz - 0.05), 0.45, 0.08, 'marble', verts=24)
     for i, x in enumerate((2.4, 3.6, 4.8)):
         stool(W(x, 0, bz - 0.9))
@@ -814,7 +811,7 @@ def build_party_deck():
     SPOTS['bar_lean'] = [[5.6, bz - 0.95]]
     # back bar with shelves, bottles and the neon sign on the salon wall
     wz = 7.85
-    box(W((bx0 + bx1) / 2, 0.5, wz), (bx1 - bx0, 1.0, 0.5), 'walnut', bevel=0.03, uv=0.9)
+    box(W((bx0 + bx1) / 2, 0.5, wz), (bx1 - bx0, 1.0, 0.5), 'fluted', bevel=0.03)
     box(W((bx0 + bx1) / 2, 1.02, wz), (bx1 - bx0, 0.05, 0.55), 'marble', uv=0.7)
     for k, y in enumerate((1.45, 1.95)):
         box(W((bx0 + bx1) / 2, y, wz + 0.05), (bx1 - bx0, 0.05, 0.35), 'glass_clear', bevel=0.01)
@@ -826,7 +823,7 @@ def build_party_deck():
 
     # --- DJ booth (starboard, under the overhang) ---
     dx0, dx1, dz = -5.6, -2.0, 4.8
-    box(W((dx0 + dx1) / 2, 0.55, dz), (dx1 - dx0, 1.1, 0.8), 'dark', bevel=0.04)
+    box(W((dx0 + dx1) / 2, 0.55, dz), (dx1 - dx0, 1.1, 0.8), 'tolex', bevel=0.04)
     quad([W(dx1, 0.15, dz - 0.41), W(dx0, 0.15, dz - 0.41), W(dx0, 1.0, dz - 0.41), W(dx1, 1.0, dz - 0.41)], 'dance')
     box(W((dx0 + dx1) / 2, 1.12, dz), (dx1 - dx0 + 0.1, 0.06, 0.9), 'chrome', bevel=0.02)
     for x in (dx0 + 0.8, dx1 - 0.8):
@@ -839,8 +836,13 @@ def build_party_deck():
     for x in (dx0 - 0.5, dx1 + 0.45):
         for k, (h, w) in enumerate(((1.0, 0.8), (0.8, 0.7))):
             yb = 0.5 if k == 0 else 1.4
-            box(W(x, yb, dz + 0.2), (w, h, 0.7), 'dark', bevel=0.04)
-            cyl(W(x, yb, dz - 0.16), w * 0.32, 0.06, 'rubber', axis='z', verts=24)
+            box(W(x, yb, dz + 0.2), (w, h, 0.7), 'tolex', bevel=0.05)
+            gz = S(0, 0, dz + 0.2 - 0.36)[2]
+            gx0, gx1 = S(x - w / 2 + 0.07, 0, 0)[0], S(x + w / 2 - 0.07, 0, 0)[0]
+            gy0, gy1 = S(0, yb - h / 2 + 0.07, 0)[1], S(0, yb + h / 2 - 0.07, 0)[1]
+            quad([(gx1, gy0, gz), (gx0, gy0, gz), (gx0, gy1, gz), (gx1, gy1, gz)], 'grille')
+            cyl(W(x, yb, dz - 0.17), w * 0.3, 0.04, 'rubber', axis='z', verts=28)
+            cyl(W(x, yb, dz - 0.2), w * 0.09, 0.04, 'chrome', axis='z', verts=16)
             torus(W(x, yb, dz - 0.19), w * 0.32, 0.025, 'led_cyan', axis='z')
     # disco ball under the overhang
     dbx, dby, dbz = W(0, 2.15, 4.6)
@@ -902,7 +904,7 @@ def build_flybridge():
         cushion((s * 4.4, y + 0.82, -8.1), (2.3, 0.35, 0.7), 'cushion_teal' if s > 0 else 'cushion_coral', soft=0.12)
         quad([(s * 4.4 - 0.6, y + 0.69, -11.6), (s * 4.4 + 0.3, y + 0.69, -11.6), (s * 4.4 + 0.3, y + 0.69, -9.4), (s * 4.4 - 0.6, y + 0.69, -9.4)][::(1 if s > 0 else -1)], 'towel_coral' if s > 0 else 'towel_teal')
     # flybridge bar (under the hardtop) with stools
-    box((-2.0, y + 0.55, -3.6), (4.0, 1.1, 0.75), 'walnut', bevel=0.04, uv=0.9)
+    box((-2.0, y + 0.55, -3.6), (4.0, 1.1, 0.75), 'fluted', bevel=0.04)
     box((-2.0, y + 1.13, -3.65), (4.2, 0.08, 1.0), 'marble', bevel=0.03, uv=0.7)
     box((-2.0, y + 0.08, -3.98), (4.0, 0.05, 0.04), 'led_cyan', bevel=0.01)
     for x in (-3.4, -2.0, -0.6):
@@ -910,7 +912,7 @@ def build_flybridge():
     bottles(-3.6, -0.6, y + 1.17, -3.35)
     # lounge + table under the hardtop
     sofa((3.7, y, -2.0), 4.0, 1.1, '-x', accent=('cushion_yellow', 'cushion_coral'))
-    cyl((2.3, y + 0.3, -2.0), 0.7, 0.6, 'teak', verts=28, bevel=0.03, uv=0.6)
+    cyl((2.3, y + 0.3, -2.0), 0.7, 0.6, 'wood', verts=28, bevel=0.03)
     # helm console with the wheel
     box((-2.6, y + 0.6, 0.2), (2.2, 1.2, 0.9), 'hull_white', bevel=0.08)
     box((-2.6, y + 1.25, 0.5), (1.9, 0.08, 0.5), 'screen', bevel=0.02)
