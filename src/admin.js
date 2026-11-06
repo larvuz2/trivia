@@ -1,6 +1,6 @@
 // Host-only Setup panel. Everything is saved to the browser as you type.
 import { POINTS, defaultConfig } from './data.js';
-import { putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame } from './storage.js';
+import { putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame, cloud, onCloudChange, getAdminKey, setAdminKey, checkAdminKey, publishAll, loadCloudConfig, deviceOnlyMedia, pushCloud } from './storage.js';
 import { defaultSticker } from './characters.js';
 
 const TRANSITIONS = [
@@ -31,7 +31,23 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
   root.className = 'admin';
   document.body.appendChild(root);
 
+  const cloudText = () => {
+    if (!cloud.available) return ['💻', 'Saved on this device only', 'local'];
+    if (!getAdminKey()) return ['🔒', 'Netlify: enter host password to save', 'locked'];
+    const map = { saving: ['⏳', 'Saving to Netlify…', 'saving'], synced: ['☁️', 'Saved to Netlify', 'ok'], locked: ['🔒', 'Wrong host password', 'error'], error: ['⚠️', cloud.error || 'Netlify error', 'error'], empty: ['☁️', 'Netlify ready (nothing saved yet)', 'ok'] };
+    return map[cloud.status] || ['☁️', 'Netlify', 'ok'];
+  };
+  const paintCloud = () => {
+    const chip = root.querySelector('[data-cloud]');
+    if (!chip) return;
+    const [icon, text, cls] = cloudText();
+    chip.className = `cloud-chip ${cls}`;
+    chip.textContent = `${icon} ${text}`;
+  };
+  const unsub = onCloudChange(paintCloud);
+
   const close = () => {
+    unsub();
     clearTimeout(timer);
     onChange(structuredClone(cfg), 'all');
     root.remove();
@@ -39,12 +55,19 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
   };
 
   async function render() {
+    await renderInner();
+    paintCloud();
+  }
+
+  async function renderInner() {
     root.innerHTML = `
       <div class="admin-panel">
         <div class="admin-head">
           <div><div class="admin-kicker">HOST ONLY</div><h2>⚙ Game Setup</h2></div>
-          <button class="btn" data-close>✔ Done</button>
+          <div class="admin-head-right"><span class="cloud-chip" data-cloud></span><button class="btn" data-close>✔ Done</button></div>
         </div>
+        ${cloud.available && !getAdminKey() ? `<div class="cloud-banner">🔒 This game is on Netlify. Enter the host password so your photos and questions are saved for everyone:
+          <input type="password" data-keyinput placeholder="host password"> <button class="btn-mini good" data-unlock>Unlock</button> <span class="cloud-msg" data-cloudmsg></span></div>` : ''}
         <div class="admin-tabs">
           ${[['characters', '👫 Characters & Couples'], ['categories', '🗂 Categories'], ['questions', '❓ Questions'], ['final', '🌊 Final Splash'], ['settings', '🎛 Settings'], ['data', '💾 Save / Load']]
             .map(([k, l]) => `<button class="tab ${tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}
@@ -158,7 +181,17 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
         </div>`;
     }
     if (tab === 'data') {
-      return `<div class="a-card">
+      const local = deviceOnlyMedia(cfg);
+      const cloudCard = cloud.available ? `<div class="a-card">
+          <h3>☁️ Netlify cloud</h3>
+          <p class="hint">Your setup and uploads are stored on this Netlify site (Netlify Blobs), so every device that opens the game gets the same questions and photos. Changes save automatically while you're unlocked.</p>
+          ${getAdminKey()
+            ? `<div class="row"><button class="btn" data-publish>☁️ Publish everything now</button><button class="btn btn-secondary" data-reloadcloud>↻ Reload from Netlify</button><button class="btn-mini" data-lockcloud>🔒 Lock this device</button></div>
+               ${local ? `<p class="hint warn">⚠️ ${local} file${local === 1 ? '' : 's'} only on this device — press <b>Publish everything now</b> to upload ${local === 1 ? 'it' : 'them'}.</p>` : ''}`
+            : `<div class="row"><input type="password" data-keyinput placeholder="host password"><button class="btn" data-unlock>Unlock</button></div>`}
+          <div class="cloud-msg" data-cloudmsg>${cloud.savedAt ? `Last saved: ${new Date(cloud.savedAt).toLocaleString()}` : ''}</div>
+        </div>` : `<div class="a-card"><h3>💻 Saved on this device</h3><p class="hint">Not running on Netlify (or offline), so the setup is stored in this browser. Deploy to Netlify to share it across devices.</p></div>`;
+      return `${cloudCard}<div class="a-card">
           <h3>Backup & share</h3>
           <p class="hint">Download everything (characters, photos, models and questions) as one file. Load it on the party laptop before the trip.</p>
           <div class="row"><button class="btn" data-export>⬇ Download game file</button>
@@ -206,6 +239,38 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
       a.href = URL.createObjectURL(blob);
       a.download = 'yacht-club-trivia.json';
       a.click();
+      return;
+    }
+    if (t.closest('[data-unlock]')) {
+      const input = root.querySelector('[data-keyinput]');
+      const msg = root.querySelector('[data-cloudmsg]');
+      const key = input?.value.trim();
+      if (!key) return;
+      if (msg) msg.textContent = 'Checking…';
+      const res = await checkAdminKey(key);
+      if (!res.ok) { if (msg) msg.textContent = `❌ ${res.error || 'Wrong password'}`; return; }
+      setAdminKey(key);
+      if (cloud.status === 'empty') await pushCloud(cfg); // first save of this site's setup
+      paintCloud();
+      return render();
+    }
+    if (t.closest('[data-lockcloud]')) { setAdminKey(''); paintCloud(); return render(); }
+    if (t.closest('[data-publish]')) {
+      const msg = root.querySelector('[data-cloudmsg]');
+      if (msg) msg.textContent = 'Uploading…';
+      try {
+        const out = await publishAll(cfg);
+        Object.assign(cfg, out);
+        changed('all', true);
+        render();
+      } catch (err) {
+        if (msg) msg.textContent = `❌ ${err.message}`;
+      }
+      return;
+    }
+    if (t.closest('[data-reloadcloud]')) {
+      const fresh = await loadCloudConfig();
+      if (fresh) { Object.assign(cfg, fresh); changed('all', true); render(); }
       return;
     }
     if (t.closest('[data-cleargame]')) { clearGame(); t.textContent = 'Cleared ✓'; return; }

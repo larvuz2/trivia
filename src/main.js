@@ -5,7 +5,7 @@ import { Confetti, Splash, makeCategoryProp } from './fx.js';
 import { CameraRig } from './camera.js';
 import { sfx, unlockAudio, startMusic, setAudioEnabled, setMusicState } from './audio.js';
 import { IntroDirector } from './intro.js';
-import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL } from './storage.js';
+import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL, loadCloudConfig } from './storage.js';
 import * as G from './game.js';
 import { POINTS } from './data.js';
 import { openAdmin } from './admin.js';
@@ -68,6 +68,9 @@ async function init() {
   try {
     await Promise.all([document.fonts.load('64px "Lilita One"'), document.fonts.load('20px "Fredoka"')]);
   } catch { /* fonts optional */ }
+  // shared setup (questions, photos, characters) saved on Netlify — falls back to this device's copy
+  const cloudCfg = await loadCloudConfig();
+  if (cloudCfg) config = cloudCfg;
   setLoad(0.1, 'Sailing the party yacht into La Paz…');
   try {
     await world.loadYacht('models/yacht.glb', (p) => setLoad(0.1 + p * 0.6));

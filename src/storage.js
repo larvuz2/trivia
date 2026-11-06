@@ -1,5 +1,9 @@
-// Persistence: game config + in-progress game live in localStorage,
-// uploaded media (photos, stickers, .glb models) live in IndexedDB.
+// Persistence.
+// - On Netlify: the game setup (characters, categories, questions, settings) and uploaded media live in
+//   Netlify Blobs via two small functions (/api/content, /api/media). Everyone who opens the site gets them.
+//   Writes need the host password (ADMIN_PASSWORD on the Netlify site).
+// - Offline / local dev: setup in localStorage, media in IndexedDB (device only).
+// - The in-progress game always stays in this browser's localStorage.
 import { defaultConfig, CONFIG_VERSION } from './data.js';
 
 const CONFIG_KEY = 'yct.config.v1';
@@ -17,10 +21,13 @@ function safeRemove(key) {
 
 export function loadConfig() {
   const raw = safeGet(CONFIG_KEY);
+  if (!raw) return defaultConfig();
+  try { return normalize(JSON.parse(raw)); } catch { return defaultConfig(); }
+}
+
+function normalize(cfg) {
   const def = defaultConfig();
-  if (!raw) return def;
   try {
-    const cfg = JSON.parse(raw);
     if (!cfg || cfg.version !== CONFIG_VERSION) return def;
     // Fill anything missing from defaults (forward compatible).
     cfg.settings = { ...def.settings, ...cfg.settings };
@@ -35,7 +42,137 @@ export function loadConfig() {
 }
 
 export function saveConfig(cfg) {
-  return safeSet(CONFIG_KEY, JSON.stringify(cfg));
+  const ok = safeSet(CONFIG_KEY, JSON.stringify(cfg));
+  if (cloud.available && getAdminKey()) schedulePush(cfg);
+  return ok;
+}
+
+// ---------- Netlify cloud (Blobs) ----------
+export const cloud = { available: false, status: 'local', savedAt: null, error: null };
+const listeners = new Set();
+function setCloud(patch) {
+  Object.assign(cloud, patch);
+  listeners.forEach((f) => f(cloud));
+}
+export function onCloudChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+const ADMIN_KEY = 'yct.adminKey';
+export function getAdminKey() { return safeGet(ADMIN_KEY) || ''; }
+export function setAdminKey(k) { if (k) safeSet(ADMIN_KEY, k); else safeRemove(ADMIN_KEY); }
+
+/** Ask Netlify for the shared setup. Returns it (normalized) or null (not on Netlify / nothing saved yet). */
+export async function loadCloudConfig() {
+  try {
+    const r = await fetch('/api/content', { cache: 'no-store' });
+    const isJSON = (r.headers.get('content-type') || '').includes('json');
+    if (r.status === 404 && isJSON) { setCloud({ available: true, status: 'empty' }); return null; }
+    if (!r.ok || !isJSON) throw new Error('no cloud');
+    const data = await r.json();
+    const cfg = normalize(data);
+    safeSet(CONFIG_KEY, JSON.stringify(cfg));
+    setCloud({ available: true, status: 'synced', savedAt: data.savedAt || null, error: null });
+    return cfg;
+  } catch {
+    setCloud({ available: false, status: 'local' });
+    return null;
+  }
+}
+
+let pushTimer = null;
+function schedulePush(cfg) {
+  clearTimeout(pushTimer);
+  setCloud({ status: 'saving' });
+  const snapshot = JSON.stringify(cfg);
+  pushTimer = setTimeout(() => pushCloud(JSON.parse(snapshot)), 900);
+}
+
+/** Check a host password without changing anything. Resolves to { ok, error }. */
+export async function checkAdminKey(key) {
+  try {
+    const r = await fetch('/api/content?check=1', { method: 'POST', headers: { 'x-admin-key': key } });
+    const res = await r.json().catch(() => ({}));
+    return { ok: r.ok, error: res.error };
+  } catch {
+    return { ok: false, error: 'Could not reach Netlify' };
+  }
+}
+
+/** Save the setup to Netlify now. Resolves to true on success. */
+export async function pushCloud(cfg) {
+  if (!cloud.available) return false;
+  setCloud({ status: 'saving' });
+  try {
+    const r = await fetch('/api/content', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-admin-key': getAdminKey() },
+      body: JSON.stringify(cfg),
+    });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setCloud({ status: r.status === 401 ? 'locked' : 'error', error: res.error || `Error ${r.status}` });
+      return false;
+    }
+    setCloud({ status: 'synced', savedAt: res.savedAt, error: null });
+    return true;
+  } catch (e) {
+    setCloud({ status: 'error', error: 'Could not reach Netlify' });
+    return false;
+  }
+}
+
+/** Shrink big photos before upload (keeps PNG transparency for stickers). */
+async function prepareUpload(blob) {
+  const type = blob.type || '';
+  if (!/^image\/(jpeg|png|webp)$/.test(type) || typeof createImageBitmap !== 'function') return blob;
+  try {
+    const bmp = await createImageBitmap(blob);
+    const max = 1600;
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    if (k === 1 && blob.size < 900 * 1024) return blob;
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const outType = type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const out = await new Promise((res) => c.toBlob(res, outType, 0.86));
+    return out && out.size < blob.size ? out : blob;
+  } catch {
+    return blob;
+  }
+}
+
+async function uploadToCloud(blob, name = '') {
+  const body = await prepareUpload(blob);
+  const r = await fetch('/api/media', {
+    method: 'POST',
+    headers: { 'content-type': body.type || 'application/octet-stream', 'x-admin-key': getAdminKey(), 'x-file-name': name },
+    body,
+  });
+  const res = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(res.error || `Upload failed (${r.status})`);
+  return res.url;
+}
+
+/** Count media that only exist on this device (uploaded while offline / before the password was entered). */
+export function deviceOnlyMedia(cfg) {
+  let n = 0;
+  const check = (ref) => { if (ref?.startsWith('idb:')) n++; };
+  cfg.characters.forEach((c) => { check(c.sticker); check(c.model); });
+  cfg.questions.forEach((col) => col.forEach((q) => check(q.image)));
+  check(cfg.final?.image);
+  return n;
+}
+
+/** Upload every device-only file to Netlify and save the setup. Returns the updated setup. */
+export async function publishAll(cfg) {
+  const out = await mapRefs(cfg, async (ref) => {
+    if (!ref?.startsWith('idb:')) return ref;
+    const blob = await getBlob(ref);
+    return blob ? uploadToCloud(blob) : null;
+  });
+  const ok = await pushCloud(out);
+  if (!ok) throw new Error(cloud.error || 'Could not save to Netlify');
+  safeSet(CONFIG_KEY, JSON.stringify(out));
+  return out;
 }
 
 export function loadGame() {
@@ -74,13 +211,25 @@ async function tx(mode, fn) {
 
 const urlCache = new Map();
 
+/** Store an uploaded file. On Netlify (with the host password) it goes to the cloud; otherwise to this device. */
 export async function putMedia(blob) {
+  if (cloud.available && getAdminKey()) {
+    try {
+      return await uploadToCloud(blob, blob.name || '');
+    } catch (e) {
+      setCloud({ status: 'error', error: `${e.message} — kept on this device instead` });
+    }
+  }
   const key = `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   await tx('readwrite', (s) => s.put(blob, key));
   return `idb:${key}`;
 }
 
 export async function deleteMedia(ref) {
+  if (ref?.startsWith('/api/media/') && cloud.available && getAdminKey()) {
+    fetch(ref, { method: 'DELETE', headers: { 'x-admin-key': getAdminKey() } }).catch(() => {});
+    return;
+  }
   if (!ref?.startsWith('idb:')) return;
   const key = ref.slice(4);
   urlCache.delete(ref);

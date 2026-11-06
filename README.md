@@ -5,6 +5,37 @@ The four guys have been friends forever. Now the girls have to prove how well th
 
 Jeopardy!-style board + Jackbox-style personality + Overcooked-style miniature 3D, all in the browser (Three.js).
 
+## Deploy on Netlify (and save questions/photos there)
+
+The repo is ready for Netlify — `netlify.toml` builds with `npm run build` and publishes `dist/`.
+
+1. In Netlify: **Add new site → Import an existing project → GitHub →** pick this repo.
+   Branch to deploy: `claude/elegant-turing-edkob3` (or whichever branch you merge into).
+   Build settings are read from `netlify.toml` — nothing to type.
+2. **Site configuration → Environment variables → Add a variable:** `ADMIN_PASSWORD` = a password only the host knows.
+   Then **Deploys → Trigger deploy** so the functions pick it up.
+3. Open the site → **⚙ Game Setup** → enter the host password in the yellow bar → upload photos, edit questions.
+   The chip in the top-right of Setup shows **☁️ Saved to Netlify** when everything is stored.
+
+How it works (no database): two small Netlify Functions store everything in **Netlify Blobs**, the file storage built into
+every Netlify site.
+
+| Endpoint | What |
+| --- | --- |
+| `GET /api/content` | the shared setup (characters, categories, questions, settings) — everyone reads it on load |
+| `PUT /api/content` | save it (needs the host password) — Setup does this automatically ~1 s after each change |
+| `POST /api/media` | upload a photo / sticker / `.glb` (needs the host password); photos are resized in the browser first |
+| `GET /api/media/:id` | serve an uploaded file (cached) |
+
+Notes:
+- Uploads are limited to ~5 MB per file by Netlify Functions. Photos are shrunk automatically; big 3D models can go
+  in the repo instead (`public/models/…`).
+- Anything uploaded while locked or offline stays on that device until you press **Save / Load → Publish everything now**.
+- **Download game file** still makes a full backup you can load anywhere.
+- The in-progress game (scores, used tiles) stays in the browser of the device running the game.
+- Local: `npm run dev` uses this browser's storage. To try the Netlify functions locally: `npx netlify dev`
+  (with `ADMIN_PASSWORD` set in your shell).
+
 ## Run it
 
 ```bash

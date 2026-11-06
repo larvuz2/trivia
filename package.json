@@ -1,7 +1,7 @@
 {
   "name": "yacht-club-trivia",
   "version": "1.0.0",
-  "description": "Yacht Club Trivia \u2014 a cozy 3D party trivia game set on a yacht in La Paz",
+  "description": "Yacht Club Trivia — a cozy 3D party trivia game set on a yacht in La Paz",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/larvuz2/trivia#readme",
   "dependencies": {
+    "@netlify/blobs": "^8.1.0",
     "three": "^0.170.0"
   },
   "devDependencies": {

@@ -566,3 +566,15 @@ textarea { resize: vertical; }
 }
 .intro-hint.ready { opacity: 1; animation: bob-y 2s ease-in-out infinite; }
 .ih-count { font-family: var(--display); color: var(--gold); letter-spacing: 1px; }
+
+/* ---------- Netlify cloud status in Setup ---------- */
+.admin-head-right { display: flex; align-items: center; gap: 12px; }
+.cloud-chip { font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 99px; background: #eef6f7; color: #0d8790; white-space: nowrap; }
+.cloud-chip.local { background: #f1ece3; color: #8a7a66; }
+.cloud-chip.locked, .cloud-chip.saving { background: #fff3d1; color: #9a6b00; }
+.cloud-chip.error { background: #ffe1e1; color: #b42318; }
+.cloud-banner { margin: 0 20px 10px; padding: 10px 14px; border-radius: 14px; background: #fff3d1; color: #6b4a00; font-weight: 600; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cloud-banner input { padding: 6px 10px; }
+.cloud-msg { font-size: 13px; color: #6b5b4a; margin-top: 6px; }
+.hint.warn { color: #9a6b00; }
+.btn.file-btn.btn-secondary { background: linear-gradient(180deg, #2fd3dd, var(--teal)); color: #fff; }

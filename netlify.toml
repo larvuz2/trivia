@@ -1,0 +1,17 @@
+# Netlify: static Vite build + two tiny functions backed by Netlify Blobs (no database).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# long cache for the big static 3D assets
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
