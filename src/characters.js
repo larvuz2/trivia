@@ -1,0 +1,619 @@
+// Placeholder chibi characters with a small procedural animation library.
+// A real .glb can replace the placeholder body at any time (Setup → Characters).
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+const SKIN = ['#f1c7a5', '#e0ac85', '#c98e68', '#f5d3b8', '#d9a07a', '#b97c5a', '#eebf9a', '#f0c9a8'];
+const HAIR = ['#3b2a20', '#1f1a17', '#6b4423', '#2c2220', '#8a5a2b', '#1b1b1b', '#a0522d', '#4a3020'];
+
+const EMOTE_CHARS = { sleep: '💤', sad: '😭', laugh: '😂', surprise: '❗', cheer: '🎉', love: '❤️', point: '👉', think: '🤔', dizzy: '💫' };
+
+function emoteTexture(ch) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = 'white';
+  g.beginPath();
+  g.arc(64, 58, 50, 0, Math.PI * 2);
+  g.fill();
+  g.beginPath();
+  g.moveTo(44, 100);
+  g.lineTo(64, 124);
+  g.lineTo(78, 98);
+  g.fill();
+  g.font = '62px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(ch, 64, 62);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const emoteCache = {};
+function getEmote(name) {
+  if (!emoteCache[name]) emoteCache[name] = emoteTexture(EMOTE_CHARS[name] || name);
+  return emoteCache[name];
+}
+
+function nameTexture(name, color) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  g.font = '64px "Lilita One", sans-serif';
+  const w = Math.min(500, g.measureText(name).width + 70);
+  const x = (512 - w) / 2;
+  g.fillStyle = color;
+  roundRect(g, x, 14, w, 100, 50);
+  g.fill();
+  g.lineWidth = 8;
+  g.strokeStyle = 'white';
+  g.stroke();
+  g.fillStyle = 'white';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(name, 256, 68);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+export class Character {
+  constructor(data, index) {
+    this.data = data;
+    this.index = index;
+    this.root = new THREE.Group(); // position/facing on deck
+    this.root.name = data.id;
+    this.body = new THREE.Group(); // procedural bounce/lean
+    this.root.add(this.body);
+    this.state = 'idle';
+    this.stateTime = 0;
+    this.target = null;
+    this.facing = 0;
+    this.targetFacing = 0;
+    this.speed = 4.2;
+    this.phase = Math.random() * 10;
+    this.blinkT = 2 + Math.random() * 3;
+    this.mixer = null;
+    this.buildPlaceholder();
+    this.buildLabels();
+  }
+
+  buildPlaceholder() {
+    const d = this.data;
+    const isGirl = d.role === 'girl';
+    const skin = new THREE.MeshStandardMaterial({ color: SKIN[this.index % SKIN.length], roughness: 0.65 });
+    const outfit = new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.6 });
+    const outfit2 = new THREE.MeshStandardMaterial({ color: new THREE.Color(d.color).multiplyScalar(0.7), roughness: 0.6 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: HAIR[this.index % HAIR.length], roughness: 0.7 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#1d1a24', roughness: 0.4 });
+    const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    const blush = new THREE.MeshBasicMaterial({ color: '#ff8fa3', transparent: true, opacity: 0.6 });
+    this.mats = { skin, outfit, hairMat };
+
+    const v = new THREE.Group();
+    this.placeholder = v;
+    this.body.add(v);
+
+    // legs / feet
+    this.feet = [];
+    for (const s of [-1, 1]) {
+      const leg = new THREE.Group();
+      leg.position.set(0.17 * s, 0.42, 0);
+      const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.22, 4, 8), isGirl ? skin : outfit2);
+      shin.position.y = -0.18;
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8), dark);
+      foot.scale.set(1, 0.6, 1.35);
+      foot.position.set(0, -0.36, 0.05);
+      leg.add(shin, foot);
+      v.add(leg);
+      this.feet.push(leg);
+    }
+    // torso
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.35, 6, 16), outfit);
+    torso.position.y = 0.78;
+    torso.scale.set(1, 1, 0.85);
+    v.add(torso);
+    if (isGirl) {
+      const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.4, 16, 1, true), outfit);
+      skirt.position.y = 0.52;
+      v.add(skirt);
+    } else {
+      // shirt stripe / collar
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 6, 16), white);
+      collar.rotation.x = Math.PI / 2;
+      collar.position.y = 1.1;
+      v.add(collar);
+    }
+    // arms (pivot at shoulder)
+    this.arms = [];
+    for (const s of [-1, 1]) {
+      const arm = new THREE.Group();
+      arm.position.set(0.38 * s, 0.98, 0);
+      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.3, 4, 8), outfit);
+      upper.position.y = -0.2;
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), skin);
+      hand.position.y = -0.42;
+      arm.add(upper, hand);
+      arm.rotation.z = 0.25 * s;
+      v.add(arm);
+      this.arms.push(arm);
+    }
+    // head
+    const head = new THREE.Group();
+    head.position.y = 1.52;
+    this.head = head;
+    v.add(head);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.46, 24, 18), skin);
+    skull.scale.set(1, 0.95, 0.95);
+    head.add(skull);
+    // eyes
+    this.eyes = [];
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Group();
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 10), dark);
+      ball.scale.set(1, 1.3, 0.6);
+      const shine = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), white);
+      shine.position.set(0.02, 0.03, 0.035);
+      eye.add(ball, shine);
+      eye.position.set(0.15 * s, 0.03, 0.41);
+      head.add(eye);
+      this.eyes.push(eye);
+      const b = new THREE.Mesh(new THREE.CircleGeometry(0.06, 12), blush);
+      b.position.set(0.25 * s, -0.09, 0.385);
+      b.rotation.y = 0.45 * s;
+      head.add(b);
+    }
+    // mouth
+    const mouthShape = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.018, 6, 12, Math.PI), dark);
+    mouthShape.rotation.z = Math.PI;
+    mouthShape.position.set(0, -0.12, 0.42);
+    head.add(mouthShape);
+    this.mouth = mouthShape;
+    // hair
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.49, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+    cap.position.y = 0.04;
+    cap.rotation.x = -0.25;
+    head.add(cap);
+    if (isGirl) {
+      const style = this.index % 3;
+      if (style === 0) {
+        const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.45, 4, 8), hairMat);
+        tail.position.set(0, -0.15, -0.48);
+        tail.rotation.x = 0.4;
+        head.add(tail);
+      } else if (style === 1) {
+        for (const s of [-1, 1]) {
+          const bun = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), hairMat);
+          bun.position.set(0.34 * s, 0.32, -0.1);
+          head.add(bun);
+        }
+      } else {
+        const back = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 12), hairMat);
+        back.scale.set(1.02, 1.1, 0.7);
+        back.position.set(0, -0.2, -0.2);
+        head.add(back);
+      }
+      const flower = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshStandardMaterial({ color: '#ff5d8f' }));
+      flower.position.set(0.3, 0.3, 0.25);
+      head.add(flower);
+    } else {
+      const style = this.index % 4;
+      if (style === 0) {
+        // sunglasses
+        const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.11, 0.04), dark);
+        glasses.position.set(0, 0.05, 0.44);
+        head.add(glasses);
+      } else if (style === 2) {
+        // captain hat
+        const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, 0.22, 16), new THREE.MeshStandardMaterial({ color: '#ffffff' }));
+        hat.position.y = 0.42;
+        const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 16, 1, false, -Math.PI / 2, Math.PI), dark);
+        brim.position.set(0, 0.33, 0.2);
+        const badge = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshStandardMaterial({ color: '#ffd166' }));
+        badge.position.set(0, 0.42, 0.37);
+        head.add(hat, brim, badge);
+      } else if (style === 3) {
+        // bucket hat
+        const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.55, 0.3, 16), new THREE.MeshStandardMaterial({ color: '#f6d365' }));
+        hat.position.y = 0.38;
+        head.add(hat);
+      }
+    }
+
+    v.traverse((o) => {
+      if (o.isMesh) o.castShadow = true;
+    });
+    // contact shadow blob
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.18, depthWrite: false }));
+    blob.rotation.x = -Math.PI / 2;
+    blob.position.y = 0.02;
+    this.root.add(blob);
+    this.blob = blob;
+  }
+
+  buildLabels() {
+    const mat = new THREE.SpriteMaterial({ map: nameTexture(this.data.name, this.data.color), depthTest: false, transparent: true });
+    this.label = new THREE.Sprite(mat);
+    this.label.scale.set(1.8, 0.45, 1);
+    this.label.position.y = 2.45;
+    this.label.renderOrder = 20;
+    this.label.visible = false;
+    this.root.add(this.label);
+
+    this.emote = new THREE.Sprite(new THREE.SpriteMaterial({ map: getEmote('cheer'), depthTest: false, transparent: true }));
+    this.emote.scale.set(0.8, 0.8, 1);
+    this.emote.position.set(0.55, 2.35, 0);
+    this.emote.renderOrder = 21;
+    this.emote.visible = false;
+    this.root.add(this.emote);
+  }
+
+  refreshLabel() {
+    this.label.material.map?.dispose();
+    this.label.material.map = nameTexture(this.data.name, this.data.color);
+    this.label.material.needsUpdate = true;
+  }
+
+  showName(v) { this.label.visible = v; }
+
+  showEmote(name, dur = 2) {
+    this.emote.material.map = getEmote(name);
+    this.emote.material.needsUpdate = true;
+    this.emote.visible = true;
+    this.emoteT = dur;
+  }
+
+  async loadModel(url) {
+    if (!url) {
+      this.clearModel();
+      return;
+    }
+    const gltf = await new GLTFLoader().loadAsync(url);
+    this.clearModel();
+    const model = SkeletonUtils.clone(gltf.scene);
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const s = 2.0 / (size.y || 1);
+    model.scale.setScalar(s);
+    box.setFromObject(model);
+    const c = box.getCenter(new THREE.Vector3());
+    model.position.x -= c.x;
+    model.position.z -= c.z;
+    model.position.y -= box.min.y;
+    model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    this.model = model;
+    this.body.add(model);
+    this.placeholder.visible = false;
+    if (gltf.animations?.length) {
+      this.mixer = new THREE.AnimationMixer(model);
+      this.clips = {};
+      for (const clip of gltf.animations) this.clips[clip.name.toLowerCase()] = clip;
+      this.playClip('idle');
+    }
+  }
+
+  clearModel() {
+    if (this.model) this.body.remove(this.model);
+    this.model = null;
+    this.mixer = null;
+    this.clips = null;
+    this.placeholder.visible = true;
+  }
+
+  playClip(state) {
+    if (!this.mixer || !this.clips) return;
+    const aliases = {
+      idle: ['idle', 'stand'], walk: ['run', 'walk'], cheer: ['cheer', 'jump', 'victory'], sad: ['sad', 'disappointed', 'defeat'],
+      laugh: ['laugh'], dance: ['dance'], surprise: ['surprise', 'surprised'], sleep: ['sleep', 'idle'], point: ['point', 'wave'], stumble: ['fall', 'trip', 'stumble'],
+    };
+    const names = aliases[state] || [state];
+    const key = Object.keys(this.clips).find((k) => names.some((n) => k.includes(n)));
+    if (!key) return;
+    const action = this.mixer.clipAction(this.clips[key]);
+    if (this.currentAction === action) return;
+    action.reset().fadeIn(0.25).play();
+    this.currentAction?.fadeOut(0.25);
+    this.currentAction = action;
+  }
+
+  // ---- behaviour API ----
+  setState(state, dur = null) {
+    this.state = state;
+    this.stateTime = 0;
+    this.stateDur = dur;
+    this.playClip(state);
+    if (state === 'sleep') this.showEmote('sleep', dur ?? 6);
+    if (state === 'sad') this.showEmote('sad', 2.4);
+    if (state === 'laugh') this.showEmote('laugh', 2.2);
+    if (state === 'surprise') this.showEmote('surprise', 1.6);
+    if (state === 'cheer' && Math.random() < 0.5) this.showEmote('cheer', 1.8);
+  }
+
+  react(state, dur = 2.4) { this.setState(state, dur); }
+
+  moveTo(x, z, { face = 0, stumble = false, delay = 0, speed = 4.2 } = {}) {
+    this.target = new THREE.Vector3(x, 0, z);
+    this.arriveFacing = face;
+    this.willStumble = stumble;
+    this.speed = speed;
+    this.moveDelay = delay;
+    this.setState('walk');
+    this.stumbled = false;
+    this.startDist = this.root.position.distanceTo(this.target);
+  }
+
+  faceTowards(x, z) {
+    this.targetFacing = Math.atan2(x - this.root.position.x, z - this.root.position.z);
+  }
+
+  place(x, z, face = 0) {
+    this.root.position.set(x, 0, z);
+    this.facing = this.targetFacing = face;
+    this.root.rotation.y = face;
+    this.target = null;
+    this.setState('idle');
+  }
+
+  update(dt) {
+    this.stateTime += dt;
+    const t = this.stateTime;
+    const T = performance.now() / 1000 + this.phase;
+    if (this.mixer) this.mixer.update(dt);
+
+    // reset pose
+    const b = this.body;
+    b.position.set(0, 0, 0);
+    b.rotation.set(0, 0, 0);
+    let armL = 0.25;
+    let armR = -0.25;
+    let armLx = 0;
+    let armRx = 0;
+    let headTilt = 0;
+    let headTurn = 0;
+    let footA = 0;
+
+    if (this.emote.visible) {
+      this.emoteT -= dt;
+      this.emote.position.y = 2.35 + Math.sin(T * 4) * 0.05;
+      if (this.emoteT <= 0) this.emote.visible = false;
+    }
+
+    switch (this.state) {
+      case 'idle': {
+        b.position.y = Math.abs(Math.sin(T * 1.6)) * 0.03;
+        b.rotation.z = Math.sin(T * 0.8) * 0.03;
+        headTurn = Math.sin(T * 0.37) * 0.35;
+        armL = 0.25 + Math.sin(T * 1.6) * 0.04;
+        armR = -armL;
+        break;
+      }
+      case 'walk': {
+        if (this.moveDelay > 0) {
+          this.moveDelay -= dt;
+          b.position.y = Math.abs(Math.sin(T * 8)) * 0.06; // anticipation hop
+          break;
+        }
+        if (!this.target) { this.setState('idle'); break; }
+        const p = this.root.position;
+        const dx = this.target.x - p.x;
+        const dz = this.target.z - p.z;
+        const dist = Math.hypot(dx, dz);
+        if (this.willStumble && !this.stumbled && dist < this.startDist * 0.55) {
+          this.stumbled = true;
+          this.setState('stumble', 1.3);
+          this.resumeTarget = true;
+          break;
+        }
+        if (dist < 0.05) {
+          p.set(this.target.x, 0, this.target.z);
+          this.target = null;
+          this.targetFacing = this.arriveFacing;
+          this.setState('idle');
+          break;
+        }
+        const step = Math.min(dist, this.speed * dt);
+        p.x += (dx / dist) * step;
+        p.z += (dz / dist) * step;
+        this.targetFacing = Math.atan2(dx, dz);
+        const cyc = T * 14;
+        b.position.y = Math.abs(Math.sin(cyc)) * 0.18;
+        b.rotation.x = 0.18;
+        footA = Math.sin(cyc) * 0.7;
+        armLx = -Math.sin(cyc) * 0.9;
+        armRx = Math.sin(cyc) * 0.9;
+        break;
+      }
+      case 'stumble': {
+        // trip, faceplant, pop back up
+        const k = Math.min(1, t / 0.35);
+        if (t < 0.35) {
+          b.rotation.x = k * 1.45;
+          b.position.y = Math.sin(k * Math.PI) * 0.3;
+          armL = 1.2; armR = -1.2;
+          armLx = armRx = -1.4;
+        } else if (t < 0.95) {
+          b.rotation.x = 1.45;
+          b.position.y = 0;
+          armLx = armRx = -2.6;
+          if (!this.saidDizzy) { this.showEmote('dizzy', 1.2); this.saidDizzy = true; }
+        } else {
+          const u = Math.min(1, (t - 0.95) / 0.35);
+          b.rotation.x = 1.45 * (1 - u);
+          b.position.y = Math.sin(u * Math.PI) * 0.4;
+        }
+        if (t >= 1.3) {
+          this.saidDizzy = false;
+          if (this.resumeTarget && this.target) { this.resumeTarget = false; this.state = 'walk'; this.stateTime = 0; this.moveDelay = 0; }
+          else this.setState('idle');
+        }
+        break;
+      }
+      case 'cheer': {
+        const j = Math.abs(Math.sin(t * 7));
+        b.position.y = j * 0.55;
+        armL = 2.6 + Math.sin(t * 14) * 0.25;
+        armR = -armL;
+        b.rotation.y = Math.sin(t * 3) * 0.2;
+        break;
+      }
+      case 'sad': {
+        b.rotation.x = 0.25;
+        headTilt = 0.45;
+        armL = 0.08; armR = -0.08;
+        b.position.y = -0.05;
+        b.rotation.z = Math.sin(t * 9) * 0.03;
+        break;
+      }
+      case 'laugh': {
+        b.rotation.x = -0.25 + Math.sin(t * 22) * 0.05;
+        b.position.y = Math.abs(Math.sin(t * 11)) * 0.08;
+        armLx = armRx = -0.6;
+        armL = 0.6; armR = -0.6;
+        headTilt = -0.3;
+        break;
+      }
+      case 'dance': {
+        const beat = t * 6;
+        b.position.y = Math.abs(Math.sin(beat)) * 0.25;
+        b.rotation.y = Math.sin(t * 2.2) * 1.2;
+        b.rotation.z = Math.sin(beat) * 0.15;
+        armL = 1.6 + Math.sin(beat) * 1.0;
+        armR = -1.6 + Math.sin(beat + Math.PI) * 1.0;
+        footA = Math.sin(beat) * 0.4;
+        headTilt = Math.sin(beat) * 0.2;
+        break;
+      }
+      case 'surprise': {
+        const k = Math.min(1, t / 0.2);
+        b.position.y = Math.sin(Math.min(1, t / 0.4) * Math.PI) * 0.45;
+        b.rotation.x = -0.25 * k;
+        armL = 2.2; armR = -2.2;
+        break;
+      }
+      case 'sleep': {
+        headTilt = 0.5;
+        b.rotation.z = 0.12 + Math.sin(t * 1.2) * 0.04;
+        b.position.y = Math.sin(t * 1.2) * 0.02;
+        armL = 0.1; armR = -0.1;
+        break;
+      }
+      case 'point': {
+        armR = -1.45;
+        armRx = -1.3;
+        b.position.y = Math.abs(Math.sin(t * 5)) * 0.06;
+        headTilt = -0.1;
+        break;
+      }
+      default:
+        break;
+    }
+
+    if (this.stateDur != null && this.state !== 'walk' && this.state !== 'stumble' && this.stateTime > this.stateDur) {
+      this.setState('idle');
+    }
+
+    // face direction smoothing
+    let dF = this.targetFacing - this.facing;
+    dF = Math.atan2(Math.sin(dF), Math.cos(dF));
+    this.facing += dF * Math.min(1, dt * 8);
+    this.root.rotation.y = this.facing;
+
+    // apply limbs (placeholder rig)
+    if (this.placeholder.visible) {
+      this.arms[0].rotation.set(armLx, 0, -armL);
+      this.arms[1].rotation.set(armRx, 0, -armR);
+      this.feet[0].rotation.x = footA;
+      this.feet[1].rotation.x = -footA;
+      this.head.rotation.set(headTilt, headTurn, 0);
+      // blink
+      this.blinkT -= dt;
+      const closed = this.state === 'sleep' || this.state === 'laugh' || (this.blinkT < 0.12 && this.blinkT > 0);
+      for (const e of this.eyes) e.scale.y = closed ? 0.15 : 1;
+      if (this.blinkT < 0) this.blinkT = 2 + Math.random() * 4;
+      const open = this.state === 'surprise' || this.state === 'cheer' || this.state === 'laugh';
+      this.mouth.scale.set(open ? 1.3 : 1, open ? 2.2 : 1, 1);
+      this.mouth.rotation.z = this.state === 'sad' ? 0 : Math.PI;
+      this.mouth.position.y = this.state === 'sad' ? -0.16 : -0.12;
+    }
+    this.blob.scale.setScalar(1 - Math.min(0.5, b.position.y));
+  }
+}
+
+// --------- 2D face stickers ---------
+const stickerCache = new Map();
+export function defaultSticker(char, index) {
+  const key = `${char.id}|${char.color}|${char.name}`;
+  if (stickerCache.has(key)) return stickerCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  // sticker border
+  g.fillStyle = '#fff';
+  g.beginPath();
+  g.arc(128, 128, 124, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = char.color;
+  g.beginPath();
+  g.arc(128, 128, 110, 0, Math.PI * 2);
+  g.fill();
+  // face
+  g.fillStyle = SKIN[index % SKIN.length];
+  g.beginPath();
+  g.ellipse(128, 142, 74, 70, 0, 0, Math.PI * 2);
+  g.fill();
+  // hair
+  g.fillStyle = HAIR[index % HAIR.length];
+  g.beginPath();
+  g.ellipse(128, 104, 80, 50, 0, Math.PI, Math.PI * 2);
+  g.fill();
+  g.beginPath();
+  g.ellipse(128, 100, 78, 34, 0, 0, Math.PI);
+  g.fill();
+  if (char.role === 'girl') {
+    g.beginPath();
+    g.ellipse(58, 150, 22, 48, 0.1, 0, Math.PI * 2);
+    g.ellipse(198, 150, 22, 48, -0.1, 0, Math.PI * 2);
+    g.fill();
+  }
+  // eyes
+  g.fillStyle = '#1d1a24';
+  for (const s of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(128 + 26 * s, 146, 8, 11, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.fillStyle = '#fff';
+  for (const s of [-1, 1]) {
+    g.beginPath();
+    g.arc(130 + 26 * s, 142, 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  // blush & smile
+  g.fillStyle = 'rgba(255,120,150,0.5)';
+  for (const s of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(128 + 46 * s, 168, 12, 7, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = '#1d1a24';
+  g.lineWidth = 6;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.arc(128, 170, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+  g.stroke();
+  const url = c.toDataURL();
+  stickerCache.set(key, url);
+  return url;
+}

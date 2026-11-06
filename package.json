@@ -1,0 +1,27 @@
+{
+  "name": "yacht-club-trivia",
+  "version": "1.0.0",
+  "description": "Yacht Club Trivia \u2014 a cozy 3D party trivia game set on a yacht in La Paz",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/larvuz2/trivia.git"
+  },
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/larvuz2/trivia/issues"
+  },
+  "homepage": "https://github.com/larvuz2/trivia#readme",
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  },
+  "private": true,
+  "type": "module"
+}
