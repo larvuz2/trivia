@@ -9,7 +9,7 @@ import { IntroDirector } from './intro.js';
 import { ExploreMode } from './explore.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL, loadCloudConfig } from './storage.js';
 import * as G from './game.js';
-import { POINTS, builtinModel } from './data.js';
+import { POINTS, builtinModel, builtinSticker } from './data.js';
 import { openAdmin } from './admin.js';
 import { loadSeaOfCortez } from './environment.js';
 
@@ -162,7 +162,7 @@ function buildDJ() {
 async function refreshStickers() {
   stickers = {};
   await Promise.all(config.characters.map(async (c, i) => {
-    stickers[c.id] = (c.sticker && (await mediaURL(c.sticker))) || defaultSticker(c, i);
+    stickers[c.id] = (c.sticker && (await mediaURL(c.sticker))) || builtinSticker(c.name) || defaultSticker(c, i);
   }));
 }
 
@@ -643,6 +643,7 @@ async function startTurn(splashIntro = true) {
   const n = setScreen(`
     <div class="turn-scores">${teamChip(0, { compact: true })}${teamChip(1, { compact: true })}</div>
     <div class="turn-splash" style="--team:${teamColor(team)}">
+      ${stickerImg(ch, 'xl ts-sticker')}
       <div class="ts-kicker">${esc(teamName(team))}</div>
       <div class="ts-name">${esc(name)}’S</div>
       <div class="ts-turn">TURN!</div>

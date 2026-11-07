@@ -136,6 +136,11 @@ html, body {
 /* ---------- Stickers ---------- */
 .sticker { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: #fff; border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.2); flex: none; }
 .sticker.xs { width: 34px; height: 34px; border-width: 2px; }
+/* die-cut face stickers (built-in): shown whole, no round crop; the white outline is part of the art */
+img.sticker[src*="img/stickers/"] { border-radius: 0; background: none; border: 0; box-shadow: none; object-fit: contain; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.3)); }
+.sticker.xl { width: clamp(110px, 16vw, 210px); height: clamp(110px, 16vw, 210px); border-width: 6px; }
+.ts-sticker { display: block; margin: 0 auto -6px; animation: slam 0.7s 0s cubic-bezier(.2,1.6,.4,1) both; }
+.tc-stickers img.sticker.xs[src*="img/stickers/"] { width: 46px; height: 46px; }
 .sticker.sm { width: 36px; height: 36px; border-width: 2px; }
 .sticker.md { width: 72px; height: 72px; }
 .sticker.lg { width: clamp(64px, 8vw, 110px); height: clamp(64px, 8vw, 110px); border-width: 5px; }
@@ -500,7 +505,8 @@ textarea { resize: vertical; }
   .player-plate { display: none; }
   .q-scores { display: none; }
   .tp-header .team-chip2 { min-width: 0; padding: 4px 8px; }
-  .tp-header .tc-stickers, .tp-header .tc-ask { display: none; }
+  .tp-header .tc-ask { display: none; }
+  .tp-header .tc-stickers img.sticker.xs { width: 26px; height: 26px; }
 }
 .q-card.final .q-scores { bottom: auto; top: 12px; right: auto; left: 50%; transform: translateX(-50%); }
 

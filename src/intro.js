@@ -149,7 +149,7 @@ export class IntroDirector {
       g.beginPath();
       g.arc(w / 2, 290, 110, 0, Math.PI * 2);
       g.fill();
-      if (this.tvSticker?.complete) g.drawImage(this.tvSticker, w / 2 - 100, 190, 200, 200);
+      if (this.tvSticker?.complete) g.drawImage(this.tvSticker, w / 2 - 125, 165, 250, 250);
       big(this.tvChar.data.name.toUpperCase(), 480, 96);
     } else if (this.tvMode === 'start') {
       const s = 1 + pulse * 0.06;

@@ -20,6 +20,11 @@ export const BUILTIN_MODELS = {
   karla: 'models/characters/karla.glb',
   caro: 'models/characters/caro.glb',
 };
+// Face stickers made from each person's original picture (tools/characters/sticker.mjs)
+export function builtinSticker(name) {
+  const k = String(name || '').trim().toLowerCase();
+  return BUILTIN_MODELS[k] ? `img/stickers/${k}.png` : null;
+}
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
@@ -131,7 +136,7 @@ export function defaultSettings() {
     askTheBoys: true,
     finalSplash: true,
     animations: true,
-    teamNames: ['TEAM SUNSET', 'TEAM TIDAL WAVE'],
+    teamNames: ['TEAM SOL', 'TEAM MAR'],
     teamColors: ['#ff7a45', '#16b8c4'],
   };
 }

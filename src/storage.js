@@ -31,6 +31,9 @@ function normalize(cfg) {
     if (!cfg || cfg.version !== CONFIG_VERSION) return def;
     // Fill anything missing from defaults (forward compatible).
     cfg.settings = { ...def.settings, ...cfg.settings };
+    // the old default team names become the new, simpler defaults (custom names are kept)
+    const oldNames = ['TEAM SUNSET', 'TEAM TIDAL WAVE'];
+    cfg.settings.teamNames = (cfg.settings.teamNames || def.settings.teamNames).map((n, i) => (n === oldNames[i] ? def.settings.teamNames[i] : n));
     cfg.final = { ...def.final, ...cfg.final };
     cfg.characters = cfg.characters?.length === 8 ? cfg.characters : def.characters;
     // placeholder names from older saves pick up the new default names (e.g. "Guy 1" -> "Joe")
