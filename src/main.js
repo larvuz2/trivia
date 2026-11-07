@@ -351,6 +351,7 @@ function globalButtons() {
     <button class="icon-btn ${s.music ? '' : 'off'}" data-act="music" title="Music">🎵</button>
     <button class="icon-btn" data-act="fs" title="Fullscreen (F)">⛶</button>
     <button class="icon-btn" data-act="help" title="Host shortcuts (?)">?</button>
+    ${game.phase !== 'menu' ? '<button class="icon-btn restart-btn" data-act="restart" title="Start over from scratch">↺</button>' : ''}
   </div>`);
   n.addEventListener('click', (e) => {
     const a = e.target.closest('button')?.dataset.act;
@@ -360,8 +361,41 @@ function globalButtons() {
     if (a === 'music') { s.music = !s.music; saveConfig(config); applySettings(); startMusic(); e.target.closest('button').classList.toggle('off', !s.music); }
     if (a === 'fs') toggleFullscreen();
     if (a === 'help') toggleHelp();
+    if (a === 'restart') confirmStartOver();
   });
   return n;
+}
+
+/** ↺ in the corner: wipe the current game (teams, scores, answered tiles) and start again from the main menu.
+ *  Questions, photos, characters and settings are kept. A clean reload resets every system (intro, timers, camera). */
+function confirmStartOver() {
+  if (document.querySelector('.modal.restart')) return;
+  const n = el(`<div class="modal-wrap"><div class="modal restart">
+    <h2>Start over?</h2>
+    <p>This clears the current game — teams, scores and the questions already played — and goes back to the main menu.
+    Your questions, photos, characters and settings stay as they are.</p>
+    <div class="restart-btns"><button class="btn btn-ghost" data-r="no">Keep playing</button><button class="btn btn-play" data-r="yes">↺ Start over</button></div>
+  </div></div>`);
+  const close = () => { n.remove(); window.removeEventListener('keydown', onKey, true); };
+  const go = () => {
+    stopTimer();
+    clearGame();
+    try { sessionStorage.removeItem('yct.resume'); } catch {}
+    n.querySelector('.modal').innerHTML = '<h2>Starting over…</h2>';
+    setTimeout(() => location.reload(), 250);
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); go(); }
+  };
+  window.addEventListener('keydown', onKey, true);
+  n.addEventListener('click', (e) => {
+    const r = e.target.closest('[data-r]')?.dataset.r;
+    if (r === 'yes') go();
+    else if (r === 'no' || e.target === n) close();
+  });
+  document.body.appendChild(n);
+  sfx('pop');
 }
 function toggleFullscreen() {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});

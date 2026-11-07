@@ -123,6 +123,9 @@ The rest of the yacht is one static collision mesh. Rapier only downloads when E
 
 ## Host controls (keyboard)
 
+**↺ Start over** (corner button, during a game): after a confirmation it clears the current game — teams, scores,
+played questions — and reloads to a clean main menu. Questions, photos, characters and settings are kept.
+
 | Key | Action |
 | --- | --- |
 | `Space` | Reveal / hide the answer |

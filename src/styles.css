@@ -649,3 +649,8 @@ textarea { resize: vertical; }
 /* shown for a moment if the graphics context has to be recovered */
 .gl-recover { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: #1a2449; color: #fff;
   font-family: var(--display); font-size: clamp(20px, 3vw, 34px); letter-spacing: 0.04em; }
+
+/* ↺ start over (corner) + its confirmation */
+.global-btns .restart-btn { font-weight: 800; }
+.modal.restart p { margin: 0 0 18px; line-height: 1.45; }
+.restart-btns { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
