@@ -1,7 +1,8 @@
 // Generate a character with Meshy v6 (image-to-3D on fal.ai) from a T-pose picture.
 //   FAL_KEY=... node tools/characters/generate.mjs tools/characters/<name>_ref.jpg <name> [options]
 // Writes tools/characters/<name>_src.glb, then run: tools/characters/build.sh <name>
-// Options: --texture meshy-7|meshy-n1 (meshy-7 matched faces best in a side-by-side test)   --polycount 70000   --out <file.glb>   --dry
+// Options: --texture meshy-7|meshy-n1 (meshy-7 matched faces best in a side-by-side test)   --polycount 70000
+//          --pose exact|t-pose (exact = keep the picture's pose, e.g. a head tilt)   --out <file.glb>   --dry
 // The picture is first cropped tight around the character (crop_ref.py) so Meshy sees the face at full res.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,6 +16,7 @@ const flag = args.includes('--dry') ? '--dry' : null;
 if (!src || !name) { console.error('usage: node tools/characters/generate.mjs <image> <name> [--texture meshy-n1] [--polycount 70000] [--out f.glb] [--dry]'); process.exit(1); }
 const textureModel = opt('--texture', 'meshy-7');
 const polycount = Number(opt('--polycount', 70000));
+const pose = opt('--pose', 't-pose') === 'exact' ? '' : 't-pose';
 const img = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'char-')), `${name}_crop.png`);
 execFileSync('python3', [path.join(path.dirname(new URL(import.meta.url).pathname), 'crop_ref.py'), src, img], { stdio: 'inherit' });
 const KEY = process.env.FAL_KEY;
@@ -35,7 +37,7 @@ if (flag === '--dry') process.exit(0);
 // 2. Meshy v6: T-pose, ~70k triangles, no forced symmetry (faces aren't symmetric), texture painted from
 //    the picture. meshy-n1 textures from the reference image only (closest likeness, no PBR maps).
 const input = {
-  image_url: init.file_url, texture_image_url: init.file_url, pose_mode: 't-pose',
+  image_url: init.file_url, texture_image_url: init.file_url, pose_mode: pose,
   target_polycount: polycount, should_remesh: true, topology: 'triangle', symmetry_mode: 'off',
   texture_model: textureModel, enable_pbr: textureModel !== 'meshy-n1',
 };
