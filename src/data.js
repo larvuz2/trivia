@@ -14,11 +14,12 @@ export const BUILTIN_MODELS = {
   joe: 'models/characters/joe.glb',
   ray: 'models/characters/ray.glb',
   gabriel: 'models/characters/gabriel.glb',
+  gus: 'models/characters/gus.glb',
 };
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
-const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Guy 4'];
+const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Gus'];
 
 const TAGLINES = {
   boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
