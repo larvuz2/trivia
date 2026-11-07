@@ -80,9 +80,9 @@ export function movieQuestions() {
   });
   return [
     M('monsters', 'Monsters, Inc. (2001)', 'Mike’s one big eye and Sulley’s blue fur'),
-    M('parasite', 'Parasite (2019)', 'The rain, the stairs down to the semi-basement'),
-    M('leon', 'Léon: The Professional (1994)', 'His round sunglasses, the milk carton and the gun'),
     M('dragon', 'How to Train Your Dragon (2010)', 'Toothless’s tail — one fin is Hiccup’s prosthetic'),
+    M('leon', 'Léon: The Professional (1994)', 'His round sunglasses, the milk carton and the gun'),
+    M('parasite', 'Parasite (2019)', 'The rain, the stairs down to the semi-basement'),
     M('freddy', 'Freddy Got Fingered (2001)', 'Tom Green: “Daddy, would you like some sausage?”'),
   ];
 }
