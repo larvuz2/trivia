@@ -560,7 +560,18 @@ export class MovieMode {
     const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: '#e8f4ff', transparent: true, opacity: 0.8 }));
     this.world.scene.add(line);
     this.extras.push(line);
-    const fish = this.prop('fish', 1.3);
+    // the fal/Meshy dorado (nose turned to +x for the jump below), or the Blender one as a fallback
+    let fish = null;
+    const env = this.env?.();
+    if (env?.lib?.dorado) {
+      fish = new THREE.Group();
+      const d = env.clone('dorado');
+      d.rotation.y = -Math.PI / 2;
+      d.scale.setScalar(1.15);
+      fish.add(d);
+      this.world.scene.add(fish);
+      this.extras.push(fish);
+    } else fish = this.prop('fish', 1.3);
     if (fish) fish.visible = false;
     this.fish = fish;
     const pL = V(0, 0, 0);

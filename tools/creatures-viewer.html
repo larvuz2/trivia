@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Creatures</title>
+  <style>html, body { margin: 0; height: 100%; overflow: hidden; background: #8fc9dc; }</style>
+</head>
+<body>
+  <script type="module">
+    // tools/creatures-viewer.html?view=side|front|top — the fal/Meshy sea creatures, the gull flapping
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    const view = new URLSearchParams(location.search).get('view') || 'side';
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#8fc9dc');
+    scene.add(new THREE.HemisphereLight('#ffffff', '#5fc9c0', 2.0));
+    const sun = new THREE.DirectionalLight('#fff3df', 2.5);
+    sun.position.set(3, 6, 4);
+    scene.add(sun);
+    const gltf = await new GLTFLoader().loadAsync('../public/models/creatures.glb');
+    const names = ['seagull', 'gull', 'dorado', 'marlin', 'dolphin'];
+    const lib = {};
+    gltf.scene.children.forEach((c) => { lib[c.name] = c; });
+    const xs = [-11, -6.5, -3.5, 1.5, 8];
+    const objs = names.map((n, i) => {
+      const o = lib[n].clone(true);
+      o.position.set(xs[i], n === 'gull' ? -0.4 : 1, 0);
+      scene.add(o);
+      return o;
+    });
+    const camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, 0.1, 200);
+    // the game's convention: creatures face -Z. 'side' looks from +X? no — from the front-left so heads point left
+    if (view === 'side') { camera.position.set(-1.5, 2, 26); camera.lookAt(-1.5, 0.8, 0); objs.forEach((o) => { o.rotation.y = -Math.PI / 2; }); }
+    if (view === 'front') { camera.position.set(-1.5, 2, -26); camera.lookAt(-1.5, 0.8, 0); }
+    if (view === 'top') { camera.position.set(-1.5, 30, 0.01); camera.lookAt(-1.5, 0, 0); }
+    const wl = objs[0].getObjectByName('seagull_wingL');
+    const wr = objs[0].getObjectByName('seagull_wingR');
+    window.flap = (a) => { if (wl) wl.rotation.z = a; if (wr) wr.rotation.z = -a; renderer.render(scene, camera); };
+    window.ready = true;
+    renderer.setAnimationLoop((t) => { window.flap(Math.sin(t / 1000 * 3) * 0.5); });
+  </script>
+</body>
+</html>

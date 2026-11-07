@@ -106,6 +106,7 @@ async function init() {
   });
   movie = new MovieMode({
     world,
+    env: () => env,
     rig,
     confetti,
     splash,

@@ -30,19 +30,22 @@ export async function loadSeaOfCortez(world, onProgress) {
   const texLoader = new THREE.TextureLoader();
   let done = 0;
   const step = () => onProgress?.(++done / 5);
-  const [bay, sierra, props, places, depthTex] = await Promise.all([
+  const [bay, sierra, props, places, depthTex, creatures] = await Promise.all([
     loader.loadAsync(BASE + 'bay.glb').then((g) => (step(), g)),
     loader.loadAsync(BASE + 'sierra.glb').then((g) => (step(), g)),
     loader.loadAsync(BASE + 'props.glb').then((g) => (step(), g)),
     fetch(BASE + 'bay-places.json').then((r) => r.json()).then((j) => (step(), j)),
     texLoader.loadAsync(BASE + 'bay-depth.png').then((t) => (step(), t)),
+    // stylized sea creatures made with fal (GPT Image 2 concept -> Meshy v6), see tools/blender/creatures.py
+    loader.loadAsync('models/creatures.glb').catch((e) => { console.warn('creatures failed to load', e); return null; }),
   ]);
-  return new SeaOfCortez(world, { bay, sierra, props, places, depthTex });
+  return new SeaOfCortez(world, { bay, sierra, props, places, depthTex, creatures });
 }
 
 class SeaOfCortez {
-  constructor(world, { bay, sierra, props, places, depthTex }) {
+  constructor(world, { bay, sierra, props, places, depthTex, creatures }) {
     this.world = world;
+    this.creatures = creatures;
     this.scene = world.scene;
     this.group = new THREE.Group();
     this.group.name = 'sea-of-cortez';
@@ -60,6 +63,13 @@ class SeaOfCortez {
     prepMaterials(props.scene);
     this.lib = {};
     props.scene.children.forEach((c) => { this.lib[c.name] = c; });
+    // the fal/Meshy creatures replace the simple Blender seagull + dolphin, and add the marlin, dorado and perching gull
+    if (creatures) {
+      creatures.scene.children.forEach((c) => {
+        c.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
+        this.lib[c.name] = c;
+      });
+    }
 
     this.raycaster = new THREE.Raycaster();
     this.scatter(places);
@@ -206,8 +216,114 @@ class SeaOfCortez {
       this.group.add(o);
       return { o, off: i * 0.07, lane: (i - 1.5) * 4, phase: i * 1.7, wasUp: false };
     });
+    // a marlin now and then leaps out of the water near the yacht
+    this.marlin = this.lib.marlin ? { o: this.clone('marlin'), t: -1, next: 6 + Math.random() * 8 } : null;
+    if (this.marlin) { this.marlin.o.visible = false; this.group.add(this.marlin.o); }
+    // quirky big-eyed gulls perched on the deck railings
+    this.perched = [];
+    this.perchGulls();
     // white wash around the yacht's hull
     this.hullFoam = null;
+  }
+
+  /** Find railing tops on the yacht (ray straight down) and perch a few gulls on them. */
+  perchGulls() {
+    const w = this.world;
+    if (!this.lib.gull || !w.yachtModel || !w.stage) return;
+    const meshes = [];
+    w.yachtModel.traverse((o) => { if (o.isMesh && !o.name.startsWith('dyn_')) meshes.push(o); });
+    w.yachtModel.updateMatrixWorld(true);
+    const rc = new THREE.Raycaster();
+    // candidate spots (stage space: deck = 0): the chrome top rail along the sides (its x follows the hull, so sweep
+    // across the edge until the ray hits it) and the teak cap on top of the transom, above the name board
+    const spots = [['side', 1, -5.2], ['side', -1, 0.4], ['stern', 2.3, -8.9], ['stern', -2.9, -8.9], ['side', -1, -6.2], ['side', 1, 1.0]];
+    const down = new THREE.Vector3(0, -1, 0);
+    const probe = (x, z) => {
+      rc.set(w.stage.localToWorld(new THREE.Vector3(x, 2.5, z)), down);
+      const h = rc.intersectObjects(meshes, false)[0];
+      if (!h) return null;
+      const m = Array.isArray(h.object.material) ? h.object.material[h.face.materialIndex] : h.object.material;
+      return { p: w.stage.worldToLocal(h.point.clone()), mat: m?.name || '' };
+    };
+    for (const [kind, a, z] of spots) {
+      if (this.perched.length >= 4) break;
+      let hit = null;
+      if (kind === 'side') {
+        for (let x = 5.6; x <= 6.9 && !hit; x += 0.015) {
+          const h = probe(a * x, z);
+          if (h && h.mat === 'chrome' && h.p.y > 0.7 && h.p.y < 1.5) hit = h.p;
+        }
+      } else {
+        const h = probe(a, z);
+        if (h && h.p.y > 0.35 && h.p.y < 1.7) hit = h.p;
+      }
+      if (!hit) continue;
+      const face = Math.atan2(-(0 - hit.x), -(-2 - hit.z));   // look in toward the deck (the model faces -z)
+      const pivot = new THREE.Group();
+      const g = this.clone('gull');
+      g.scale.setScalar(0.85 + Math.random() * 0.25);
+      pivot.add(g);
+      pivot.position.copy(hit);
+      pivot.rotation.y = face;
+      w.stage.add(pivot);
+      this.perched.push({ pivot, g, base: face, yaw: 0, yawTo: 0, nextTurn: 1 + Math.random() * 3, hop: -1, nextHop: 5 + Math.random() * 10, ph: Math.random() * 6 });
+    }
+  }
+
+  updatePerched(dt, t) {
+    for (const p of this.perched) {
+      // breathe + little head-bob
+      const b = Math.sin(t * 2.4 + p.ph);
+      p.g.scale.y = p.g.scale.x * (1 + 0.035 * b);
+      p.g.rotation.x = Math.max(0, Math.sin(t * 5.3 + p.ph)) ** 6 * 0.18;
+      // look around: snap to a new direction now and then
+      p.nextTurn -= dt;
+      if (p.nextTurn < 0) { p.nextTurn = 1.2 + Math.random() * 3.5; p.yawTo = (Math.random() - 0.5) * 2.2; }
+      p.yaw += (p.yawTo - p.yaw) * Math.min(1, dt * 12);
+      p.pivot.rotation.y = p.base + p.yaw;
+      // a hop on the spot
+      p.nextHop -= dt;
+      if (p.nextHop < 0 && p.hop < 0) { p.hop = 0; p.nextHop = 6 + Math.random() * 12; }
+      if (p.hop >= 0) {
+        p.hop += dt / 0.35;
+        p.g.position.y = Math.sin(Math.PI * Math.min(1, p.hop)) * 0.14;
+        if (p.hop >= 1) { p.hop = -1; p.g.position.y = 0; }
+      }
+    }
+  }
+
+  updateMarlin(dt) {
+    const m = this.marlin;
+    if (!m) return;
+    if (m.t < 0) {
+      m.next -= dt;
+      if (m.next > 0) return;
+      // pick a spot in view of the yacht, jump across it
+      const a = Math.random() * Math.PI * 2;
+      const r = 26 + Math.random() * 24;
+      const dir = a + Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+      m.from = new THREE.Vector3(Math.cos(a) * r - Math.cos(dir) * 4.5, 0, Math.sin(a) * r - Math.sin(dir) * 4.5);
+      m.to = new THREE.Vector3(Math.cos(a) * r + Math.cos(dir) * 4.5, 0, Math.sin(a) * r + Math.sin(dir) * 4.5);
+      m.t = 0;
+      m.o.visible = true;
+      for (let i = 0; i < 5; i++) this.foam.spawn(m.from.x + (Math.random() - 0.5) * 2, m.from.z + (Math.random() - 0.5) * 2, 0.8, 2.2);
+    }
+    m.t += dt / 1.7;
+    const k = Math.min(1, m.t);
+    const o = m.o;
+    o.position.lerpVectors(m.from, m.to, k);
+    o.position.y = -1.8 + Math.sin(Math.PI * k) * 5.2;
+    const d = m.to.clone().sub(m.from);
+    o.rotation.order = 'YXZ';
+    o.rotation.y = Math.atan2(d.x, d.z) + Math.PI;
+    o.rotation.x = Math.cos(Math.PI * k) * 0.95;   // nose up on the way out, nose down on the way in
+    o.rotation.z = Math.sin(Math.PI * k * 2) * 0.25;
+    if (k >= 1) {
+      m.t = -1;
+      m.next = 14 + Math.random() * 18;
+      o.visible = false;
+      for (let i = 0; i < 6; i++) this.foam.spawn(m.to.x + (Math.random() - 0.5) * 2.5, m.to.z + (Math.random() - 0.5) * 2.5, 1, 2.6);
+    }
   }
 
   /** Foam ring hugging the yacht's waterline (called once the yacht is loaded). */
@@ -305,6 +421,8 @@ class SeaOfCortez {
     }
     // pelicans
     for (const b of this.pelicans) this.updatePelican(b, dt, t);
+    this.updateMarlin(dt);
+    this.updatePerched(dt, t);
     // dolphins: the pod swims a big loop in front of the yacht and porpoises
     const podA = t * 0.06;
     for (const d of this.dolphins) {

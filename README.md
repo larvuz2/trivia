@@ -241,6 +241,11 @@ dropping in a wave, a dance or a cheer every few seconds.
 ## Assets
 
 - `public/models/characters/*.glb` — rigged characters (Meshy v6 + `tools/blender/character.py`).
+- `public/models/creatures.glb` — the sea creatures in the same toy-3D style, made with fal: GPT Image 2 concept art
+  (`tools/creatures/concept.mjs`, the characters' picture as the style reference) → Meshy v6 → `tools/blender/creatures.py`
+  (orient, size, split the flying gull's wings so they flap). The flying **seagull** (opening shot), a quirky big-eyed
+  **gull** perched on the railings and the stern (breathing, head turns, hops), the **dolphin** pod, a **marlin** that
+  leaps near the yacht now and then, and the **dorado** in the fishing scene. Preview: `tools/creatures-viewer.html`.
 - `public/models/yacht.glb` + `yacht-layout.json` — the party yacht, built with `tools/blender/yacht.py`.
 - `public/models/env/*` — the Sea of Cortez scenery built with the Blender scripts above.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.
