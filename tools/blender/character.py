@@ -105,7 +105,22 @@ def measure(obj):
             best = (y, w)
     neck_y = best[0] if best else 0.52 * HEIGHT
     neck_y = max(arm_y + 0.06, neck_y)
-    return {'arm_y': arm_y, 'reach': reach, 'torso_w': torso_w, 'neck_y': neck_y}
+    # side split: just beside the head there is an empty band between the top of the shoulder and the
+    # ears / sideburns. Everything above it belongs to the head (low ears must never follow the arm).
+    sx = torso_w * 0.62
+    side = [y for x, y, z in pts if sx * 1.02 < abs(x) < sx + 0.2 and arm_y < y < arm_y + 0.4]
+    counts = {}
+    for y in side:
+        k = int((y - arm_y) / 0.01)
+        counts[k] = counts.get(k, 0) + 1
+    side_split = None
+    for k in range(2, 30):
+        if counts.get(k, 0) == 0 and counts.get(k + 1, 0) == 0:
+            side_split = arm_y + (k + 1) * 0.01
+            break
+    if side_split is not None and side_split >= neck_y:
+        side_split = None   # a gap at/above the neck is inside a tall collar, not between shoulder and ear
+    return {'arm_y': arm_y, 'reach': reach, 'torso_w': torso_w, 'neck_y': neck_y, 'side_split': side_split}
 
 
 # --------------------------------------------------------------------------- skeleton
@@ -292,11 +307,18 @@ def find_long_hair(obj, m):
     members = member_all
     idx = [i for r in seen for i in members.get(r, ()) if P[i, 1] <= neck + 0.04]
     print('long hair: colour', hair.round(3), 'vertices below the neck:', len(idx))
-    return set(idx) if len(idx) > 4000 else set()   # a beard, necklace or curls at the nape isn't long hair
+    return set(idx)
 
 
 def skin(obj, rig, J, m):
-    long_hair = find_long_hair(obj, m)
+    hair = find_long_hair(obj, m)
+    long_hair = hair if len(hair) > 4000 else set()   # a beard or curls at the nape isn't long hair
+    # short hair hanging just below the neck line at the BACK (the nape) moves rigidly with the head.
+    # Only behind the neck: a beard in front must keep blending into the collar.
+    vs = obj.data.vertices
+    neck_ring = [-v.co.y for v in vs if abs(v.co.z - m['neck_y']) < 0.02 and abs(v.co.x) < 0.1]
+    zc = sorted(neck_ring)[len(neck_ring) // 2] if neck_ring else 0.0
+    short_hair = set() if long_hair else {i for i in hair if vs[i].co.z > m['neck_y'] - 0.15 and -vs[i].co.y < zc - 0.05}
     groups = {n: obj.vertex_groups.new(name=n) for n in J}
     segs = {n: (Vector(h), Vector(t)) for n, (h, t) in J.items()}  # game space
     ay = m['arm_y']
@@ -315,12 +337,15 @@ def skin(obj, rig, J, m):
             groups['head'].add([v.index], 0.15 + 0.6 * f, 'REPLACE')
             groups['chest'].add([v.index], 0.85 - 0.6 * f, 'REPLACE')
             continue
-        on_shoulder = ax > sx * 0.95 and p.y < ay + 0.15   # sleeve tops belong to the arm, even on high shoulders
-        if p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25) and not on_shoulder:  # wide hair/ears too
+        split = m.get('side_split')
+        on_shoulder = ax > sx * 0.95 and p.y < (split or ay + 0.15)   # sleeve tops belong to the arm
+        beside_head = split is not None and ax > sx * 0.95 and p.y >= split  # ears, sideburns, hair at the sides
+        if v.index in short_hair or (beside_head and p.y > neck_y - 0.02) or (
+                p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25) and not on_shoulder):  # wide hair/ears too
             cands = ['head']                                   # rigid head: the face never deforms
-        elif p.y > neck_y - 0.04 and ax < sx * 1.4 and not on_shoulder:
+        elif beside_head or (p.y > neck_y - 0.04 and ax < sx * 1.4 and not on_shoulder):
             cands = ['head', 'neck']
-        elif ax > sx * 0.95 and ay - 0.12 - max(0.0, ax - sx) * 0.6 < p.y < ay + 0.25:
+        elif ax > sx * 0.95 and ay - 0.12 - max(0.0, ax - sx) * 0.6 < p.y < (split or ay + 0.25):
             # the arm/sleeve: a cone that widens away from the armpit, so the shirt's side
             # below the armpit stays on the torso (no flaps when the arms move)
             cands = [f'shoulder.{side}', f'upperarm.{side}', f'forearm.{side}', f'hand.{side}']
@@ -570,7 +595,7 @@ def main(argv):
         facing = argv[argv.index('--facing') + 1]
     obj = load(src, facing)
     m = measure(obj)
-    print('measured', {k: round(v, 3) for k, v in m.items()})
+    print('measured', {k: (round(v, 3) if v is not None else None) for k, v in m.items()})
     J = joints(m)
     rig = build_armature(J)
     skin(obj, rig, J, m)
