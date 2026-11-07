@@ -83,8 +83,8 @@ export class IntroDirector {
     this.tvCanvas.height = 582;
     this.tvTex = new THREE.CanvasTexture(this.tvCanvas);
     this.tvTex.colorSpace = THREE.SRGBColorSpace;
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false }));
-    screen.position.set(0, 1.75, 0.065);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: this.tvTex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    screen.position.set(0, 1.75, 0.075);   // clear of the frame's front face (0.06)
     g.add(screen);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 12), chrome);
     pole.position.y = 0.55;

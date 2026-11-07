@@ -28,6 +28,27 @@ function skyAt(p, out) {
 
 export const OCEAN_DOMAIN = 800; // matches tools/blender/bay.py
 
+/** GLSL: seaHeight(xz) = how far the water surface is displaced at that world spot (same as the ocean shader).
+ *  Needs the ocean uniforms uTime, uDomain, uDepth, uDepthMax. Used to keep foam riding the waves. */
+export const SEA_HEIGHT_GLSL = /* glsl */ `
+  uniform float uTime, uDomain, uDepthMax;
+  uniform sampler2D uDepth;
+  float seaDepthAt(vec2 xz){
+    vec2 uv = xz / (2.0 * uDomain) + 0.5;
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return uDepthMax;
+    return texture2D(uDepth, uv).r * uDepthMax;
+  }
+  float seaWave(vec2 p, vec2 d, float f, float s, float a){ return sin(dot(p, d) * f + uTime * s) * a; }
+  float seaHeight(vec2 xz){
+    float d = seaDepthAt(xz);
+    float r = length(xz);
+    float amp = smoothstep(0.3, 6.0, d) * (1.0 - smoothstep(380.0, 560.0, r)) * (0.4 + 0.6 * (1.0 - smoothstep(40.0, 300.0, r)));
+    return (seaWave(xz, normalize(vec2(1.0, 0.4)), 0.11, 1.1, 0.42)
+          + seaWave(xz, normalize(vec2(-0.3, 1.0)), 0.17, 1.6, 0.22)
+          + seaWave(xz, normalize(vec2(0.7, -0.8)), 0.29, 2.1, 0.1)) * amp;
+  }
+`;
+
 export class World {
   constructor(renderer) {
     this.renderer = renderer;

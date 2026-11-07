@@ -28,7 +28,7 @@ renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 7000);
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.2, 7000);   // near 0.2: 2x depth precision (less z-fighting far away)
 camera.position.set(120, 60, -140);
 const world = new World(renderer);
 const scene = world.scene;

@@ -112,7 +112,7 @@ def rod():
     chrome = mat('chrome', '#d9dde4', 0.15, 1.0)
     red = mat('reel_red', '#d8343c', 0.35, 0.2)
     parts = [
-        cyl((0, 0, -0.32), 0.03, 0.03, 0.06, mat('rubber', '#222222', 0.8)),          # butt cap
+        cyl((0, 0, -0.335), 0.03, 0.03, 0.06, mat('rubber', '#222222', 0.8)),         # butt cap
         cyl((0, 0, -0.05), 0.026, 0.024, 0.5, cork),                                   # cork grip
         cyl((0, 0, 0.26), 0.021, 0.019, 0.12, chrome),                                 # reel seat
         cyl((0, 0, 1.25), 0.017, 0.004, 1.9, blank, verts=12),                         # blank (tapers to the tip)
@@ -188,8 +188,8 @@ def beer():
         cyl((0, 0, 0.07), 0.033, 0.033, 0.14, brown, verts=20),
         cyl((0, 0, 0.165), 0.033, 0.012, 0.05, brown, verts=20),
         cyl((0, 0, 0.21), 0.012, 0.012, 0.04, brown, verts=12),
-        cyl((0, 0, 0.07), 0.034, 0.034, 0.06, label, verts=20),
-        cyl((0, 0, 0.233), 0.013, 0.013, 0.008, mat('cap_gold', '#d4a72c', 0.3, 0.8), verts=12),
+        cyl((0, 0, 0.07), 0.0365, 0.0365, 0.06, label, verts=20),
+        cyl((0, 0, 0.236), 0.015, 0.015, 0.008, mat('cap_gold', '#d4a72c', 0.3, 0.8), verts=12),
         sphere((0.02, 0, 0.235), 0.018, mat('lime', '#7bc043', 0.5), scale=(0.6, 1, 1)),
     ]
     return group('beer', parts)

@@ -279,7 +279,7 @@ export class Character {
       if (o.isMesh) o.castShadow = true;
     });
     // contact shadow blob
-    const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.18, depthWrite: false }));
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.18, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.02;
     this.root.add(blob);

@@ -1,6 +1,7 @@
 // Sea of Cortez scenery built in Blender (tools/blender/*.py): the bay, the Sierra de la Giganta,
 // hero rocks (Los Arcos, El Hongo), scattered desert plants and the living details on the water.
 import * as THREE from 'three';
+import { SEA_HEIGHT_GLSL } from './world.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
@@ -64,7 +65,7 @@ class SeaOfCortez {
     this.scatter(places);
     this.placeHeroes();
     this.buildLife();
-    this.foam = new FoamPool(this.scene, 360);
+    this.foam = new FoamPool(this.scene, 360, world.oceanUniforms);
   }
 
   groundAt(x, z) {
@@ -244,13 +245,16 @@ class SeaOfCortez {
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.setIndex(idx);
+    const ou = this.world.oceanUniforms;
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      uniforms: { uTime: { value: 0 } },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      uniforms: { uFoamTime: { value: 0 }, uTime: ou.uTime, uDomain: ou.uDomain, uDepth: ou.uDepth, uDepthMax: ou.uDepthMax },
+      // rides the same waves as the water (a flat ring blinked in and out as the waves passed through it)
+      vertexShader: SEA_HEIGHT_GLSL + 'varying vec2 vUv; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); w.y += seaHeight(w.xz); gl_Position = projectionMatrix * viewMatrix * w; }',
       fragmentShader: `
-        uniform float uTime; varying vec2 vUv;
+        uniform float uFoamTime; varying vec2 vUv;
+        #define uTime uFoamTime
         float h(float n){ return fract(sin(n) * 43758.5453); }
         float n1(float x){ float i = floor(x); float f = fract(x); return mix(h(i), h(i + 1.0), f * f * (3.0 - 2.0 * f)); }
         void main(){
@@ -268,7 +272,7 @@ class SeaOfCortez {
     this.time += dt;
     const t = this.time;
     const night = THREE.MathUtils.smoothstep(party, 0.6, 1.0);
-    if (this.hullFoam) this.hullFoam.material.uniforms.uTime.value = t;
+    if (this.hullFoam) this.hullFoam.material.uniforms.uFoamTime.value = t;
 
     // pangas
     for (const p of this.pangas) {
@@ -378,10 +382,26 @@ class SeaOfCortez {
 
 /** Little foam puffs on the water (wakes, splashes). */
 class FoamPool {
-  constructor(scene, max) {
+  constructor(scene, max, ou = null) {
     const geo = new THREE.CircleGeometry(1, 10);
     geo.rotateX(-Math.PI / 2);
-    this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }), max);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+    if (ou) {
+      // ride the waves (flat puffs at a fixed height got cut by the passing waves)
+      mat.onBeforeCompile = (sh) => {
+        Object.assign(sh.uniforms, { uTime: ou.uTime, uDomain: ou.uDomain, uDepth: ou.uDepth, uDepthMax: ou.uDepthMax });
+        sh.vertexShader = SEA_HEIGHT_GLSL + sh.vertexShader.replace('#include <project_vertex>', `
+          vec4 mvPosition = vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            mvPosition = instanceMatrix * mvPosition;
+          #endif
+          vec4 seaW = modelMatrix * mvPosition;
+          seaW.y += seaHeight(seaW.xz);
+          mvPosition = viewMatrix * seaW;
+          gl_Position = projectionMatrix * mvPosition;`);
+      };
+    }
+    this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 3;
     this.items = Array.from({ length: max }, () => ({ life: 0, x: 0, z: 0, s0: 1, s1: 2, dur: 1 }));

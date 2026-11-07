@@ -548,7 +548,7 @@ def build_stern():
     # swim platform
     box((0, 0.65, TRANSOM - 1.6), (12.2, 0.3, 3.2), 'teak', bevel=0.06, uv=0.5)
     box((0, 0.42, TRANSOM - 1.6), (12.0, 0.2, 3.0), 'white', bevel=0.05)
-    box((0, 0.53, TRANSOM - 3.15), (12.0, 0.06, 0.08), 'led_cyan', bevel=0.02)
+    box((0, 0.56, TRANSOM - 3.21), (12.0, 0.06, 0.1), 'led_cyan', bevel=0.02)   # proud of the platform edge
     # twin stairs from the aft deck down to the platform
     for s in (1, -1):
         for i in range(6):
@@ -599,7 +599,7 @@ def build_superstructure():
             cyl((x, FLY - 0.33, z), 0.12, 0.03, 'bulb', verts=12)
     # overhang pillars
     for s in (1, -1):
-        cyl((s * 5.75, (DECK + FLY) / 2, -12.4), 0.13, FLY - DECK, 'chrome', verts=16)
+        cyl((s * 5.75, (DECK + FLY - 0.08) / 2, -12.4), 0.13, FLY - DECK - 0.08, 'chrome', verts=16)   # top ends inside the slab (no disc flush with the floor)
     # skylounge on the flybridge (dark wraparound glass)
     sky = [(0.6, FLY), (8.6, FLY), (7.0, FLY + 1.85), (1.4, FLY + 1.85)]
     side_profile(sky, -3.9, 3.9, 'hull_white', bevel=0.1)
@@ -815,8 +815,12 @@ def bottle(kind, c, scale=1.0, turn=0.0):
     lathe(c, shape, glass, segs=segs, rot=rot, smooth_angle=sm, bevel=0.012 * scale if square else 0.0)
     # liquid: the body below the shoulder, filled to `fill`
     body_top = max(h for r, h in prof if r >= prof[2][0] * 0.95)
-    liq = [(r * 0.86, h + 0.004) for r, h in shape if h <= body_top * fill] or [(shape[0][0] * 0.86, 0.004)]
-    liq.append((liq[-1][0], body_top * fill))
+    top = body_top * fill
+    # keep the liquid's top clear of any step in the glass profile (a shared height flickers through the glass)
+    while any(abs(h - top) < 0.012 for r, h in shape):
+        top -= 0.006
+    liq = [(r * 0.86, h + 0.015) for r, h in shape if h <= top - 0.012] or [(shape[0][0] * 0.86, 0.015)]
+    liq.append((liq[-1][0], top))
     lathe(c, liq, liquid, segs=segs, rot=rot, smooth_angle=sm)
     # label wrapped around the front
     h0, h1 = band[0] * scale, band[1] * scale
@@ -825,7 +829,7 @@ def bottle(kind, c, scale=1.0, turn=0.0):
             if ha <= h <= hb:
                 return ra + (rb - ra) * (h - ha) / max(1e-6, hb - ha)
         return shape[-1][0]
-    lab = [(r_at(h0 + (h1 - h0) * t / 4) * 1.012, h0 + (h1 - h0) * t / 4) for t in range(5)]
+    lab = [(r_at(h0 + (h1 - h0) * t / 4) * 1.035, h0 + (h1 - h0) * t / 4) for t in range(5)]   # clear of the glass (no flicker)
     if square:
         x, y, z = c
         hw = lab[0][0] * math.cos(math.pi / 4) * 0.96
@@ -833,7 +837,7 @@ def bottle(kind, c, scale=1.0, turn=0.0):
         u0, v0, u1, v1 = _cell(cell)
         poly_mesh('label', [(x + hw, y + h0, zf), (x - hw, y + h0, zf), (x - hw, y + h1, zf), (x + hw, y + h1, zf)], [(0, 1, 2, 3)], 'labels', uvs=[(u0, v0), (u1, v0), (u1, v1), (u0, v1)])
     else:
-        lathe(c, lab, 'labels', segs=10, arc=(-1.05, 1.05), uv_cell=_cell(cell), smooth_angle=80)
+        lathe(c, lab, 'labels', segs=16, arc=(-1.05, 1.05), uv_cell=_cell(cell), smooth_angle=80)
     # closure
     x, y, z = c
     top = prof[-1][1]
@@ -879,7 +883,7 @@ def bottles(x0, x1, y, z, max_h=0.42, seed=0, kinds=None):
 def palm_pot(c, scale=1.0):
     x, y, z = c
     cyl((x, y + 0.45 * scale, z), 0.45 * scale, 0.9 * scale, 'pot', verts=20, r2=0.35 * scale, bevel=0.03)
-    cyl((x, y + 0.88 * scale, z), 0.4 * scale, 0.04, 'dark', verts=20)
+    cyl((x, y + 0.9 * scale + 0.012, z), 0.33 * scale, 0.02, 'dark', verts=20)   # soil: inside the rim, a hair above it
     trunk = [(x + 0.04 * i * i * scale, y + 0.9 * scale + i * 0.42 * scale, z) for i in range(6)]
     tube(trunk, 0.09 * scale, 'bark', res=1)
     tx, ty, tz = trunk[-1]
@@ -1072,7 +1076,7 @@ def build_party_deck():
     top = FLY - DECK + 0.45
     for s in (1, -1):
         q = W(s * 5.9, FLY - DECK, 2.15)
-        cyl((q[0], q[1] + 0.25, q[2]), 0.045, 0.5, 'chrome', verts=10)
+        cyl((q[0], q[1] + 0.256, q[2]), 0.045, 0.5, 'chrome', verts=10)
         sphere((q[0], q[1] + 0.52, q[2]), 0.07, 'gold')
     over = [W(s * 5.9, top, 1.92) for s in (1, -1)]
     string_lights(posts[0], over[0], 0.35, 10)
@@ -1095,11 +1099,11 @@ def build_flybridge():
     y = FLY
     # hot tub
     tx, tz = 0.0, -10.2
-    cyl((tx, y + 0.27, tz), 2.15, 0.54, 'hull_white', verts=48, bevel=0.06)
-    cyl((tx, y + 0.05, tz), 2.45, 0.1, 'teak', verts=48, bevel=0.03, uv=0.5)
+    cyl((tx, y + 0.275, tz), 2.15, 0.54, 'hull_white', verts=48, bevel=0.06)
+    cyl((tx, y + 0.056, tz), 2.45, 0.1, 'teak', verts=48, bevel=0.03, uv=0.5)
     cyl((tx, y + 0.66, tz), 1.92, 0.05, 'tub_water', verts=48, keep='hot_tub_water')
     torus((tx, y + 0.66, tz), 2.02, 0.2, 'hull_white')
-    torus((tx, y + 0.6, tz), 1.86, 0.035, 'led_cyan')
+    torus((tx, y + 0.71, tz), 1.79, 0.03, 'led_cyan')   # just above the water, inside the rim
     for i in range(8):
         a = i / 8 * math.tau
         sphere((tx + math.cos(a) * 1.25, y + 0.72, tz + math.sin(a) * 1.25), 0.07, 'float_sprinkle', seg=8, rings=5)
