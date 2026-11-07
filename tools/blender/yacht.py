@@ -1044,7 +1044,7 @@ def build_party_deck():
             cyl(W(x, yb, dz - 0.2), w * 0.09, 0.04, 'chrome', axis='z', verts=16)
             torus(W(x, yb, dz - 0.19), w * 0.32, 0.025, 'led_cyan', axis='z')
     # disco ball under the overhang
-    dbx, dby, dbz = W(0, 2.15, 4.6)
+    dbx, dby, dbz = W(1.7, 2.2, 4.6)   # off the intro walkway (doors -> mark)
     cyl((dbx, dby + 0.45, dbz), 0.01, 0.5, 'chrome', verts=6)
     bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=0.38, location=G(dbx, dby, dbz))
     ball = bpy.context.view_layer.objects.active
@@ -1061,19 +1061,26 @@ def build_party_deck():
         for z in (-7.5, 1.5):
             box(W(s * 6.3, 0.1, z), (0.12, 0.12, 0.5), 'chrome', bevel=0.03)
     # posts at the stern corners for the string lights
+    # everything hangs >= 2.6 above the deck so the characters (2.0 tall, arms up) never touch it
     posts = []
     for s in (1, -1):
         p = W(s * 6.35, 0, -8.6)
-        cyl((p[0], p[1] + 1.9, p[2]), 0.07, 3.8, 'chrome', verts=12)
-        sphere((p[0], p[1] + 3.85, p[2]), 0.12, 'gold')
-        posts.append((p[0], p[1] + 3.75, p[2]))
-    over = [W(s * 5.9, FLY - DECK - 0.4, 2.2) for s in (1, -1)]
+        cyl((p[0], p[1] + 2.15, p[2]), 0.07, 4.3, 'chrome', verts=12)
+        sphere((p[0], p[1] + 4.35, p[2]), 0.12, 'gold')
+        posts.append((p[0], p[1] + 4.25, p[2]))
+    # short chrome masts on the flybridge edge; the lines hang just outside the overhang edge
+    top = FLY - DECK + 0.45
+    for s in (1, -1):
+        q = W(s * 5.9, FLY - DECK, 2.15)
+        cyl((q[0], q[1] + 0.25, q[2]), 0.045, 0.5, 'chrome', verts=10)
+        sphere((q[0], q[1] + 0.52, q[2]), 0.07, 'gold')
+    over = [W(s * 5.9, top, 1.92) for s in (1, -1)]
     string_lights(posts[0], over[0], 0.35, 10)
     string_lights(posts[1], over[1], 0.35, 10)
     string_lights(posts[0], over[1], 0.9, 14)
     string_lights(posts[1], over[0], 0.9, 14)
     string_lights(posts[0], posts[1], 0.8, 12)
-    bunting(over[0], over[1], 0.4, 18)
+    bunting(over[0], over[1], 0.25, 18)
 
     # spots where the four teams' couples gather after the shuffle
     SPOTS['team'] = [

@@ -9,11 +9,12 @@ import * as THREE from 'three';
 import { sfx, setMusicState } from './audio.js';
 import { roundRect } from './characters.js';
 
-const MARK = { x: -0.7, z: 2.5 };          // where each character stops (stage space)
-const DOOR = { x: -0.9, z: 7.55 };          // just outside the salon's glass doors
-const CAM = { pos: [0.35, 1.05, -1.5], look: [-0.6, 1.55, 3.0], fov: 52 };
-const EXIT = { x: -3.4, z: -5.8 };          // walks past the camera (screen right)
+const MARK = { x: -0.1, z: 2.5 };          // where each character stops (stage space); clear of the DJ speakers
+const DOOR = { x: 0.0, z: 7.55 };           // just outside the salon's glass doors (centred)
+const CAM = { pos: [0.95, 1.05, -1.5], look: [0.0, 1.55, 3.0], fov: 52 };
+const EXIT = { x: -2.8, z: -5.8 };          // walks past the camera (screen right)
 const TV_POS = { x: 3.0, z: 3.3 };
+const GANG_X = -0.7;                       // centre of the finale line-up (leaves the START GAME TV clear)
 
 const easeOutQuad = (t) => 1 - (1 - t) * (1 - t);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -453,7 +454,7 @@ export class IntroDirector {
   async finale() {
     // everyone walks into frame and lines up around the last arrival
     const lineup = this.lineup();
-    this.world.setSpotlight(new THREE.Vector3(MARK.x, 0, MARK.z + 0.3));
+    this.world.setSpotlight(new THREE.Vector3(GANG_X, 0, MARK.z + 0.3));
     const face = (x, z) => Math.atan2(CAM.pos[0] - x, CAM.pos[2] - z);
     this.queue.forEach((c, i) => {
       const [x, z] = lineup[i];
@@ -461,7 +462,7 @@ export class IntroDirector {
         c.moveTo(x, z, { face: face(x, z), speed: 1.8, then: 'intro' });
         return;
       }
-      const fromLeft = x > MARK.x;
+      const fromLeft = x > GANG_X;
       c.target = null;
       c.place(fromLeft ? 5.6 : -6.0, z - 2.5 - (i % 3) * 0.6, 0, 'idle');
       c.pop(true, true);
@@ -476,7 +477,7 @@ export class IntroDirector {
     for (let k = 0; k < 3; k++) {
       setTimeout(() => {
         this.cannons(150);
-        this.confetti.rain(this.sw(MARK.x, 2.5, MARK.z), 8, 120);
+        this.confetti.rain(this.sw(GANG_X, 2.5, MARK.z), 8, 120);
         sfx('cannon');
       }, k * 600);
     }
@@ -499,7 +500,7 @@ export class IntroDirector {
     const pts = [];
     for (let i = 0; i < 8; i++) {
       const u = (i - 3.5) / 3.5;
-      pts.push([MARK.x + u * 2.35, MARK.z + 0.3 + Math.abs(u) * 0.25 + (i % 2) * 0.55]);
+      pts.push([GANG_X + u * 2.35, MARK.z + 0.3 + Math.abs(u) * 0.25 + (i % 2) * 0.55]);
     }
     // the last one to arrive takes the centre slot; everyone else fills in left to right
     const centre = pts.splice(4, 1)[0];
