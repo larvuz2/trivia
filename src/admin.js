@@ -1,5 +1,5 @@
 // Host-only Setup panel. Everything is saved to the browser as you type.
-import { POINTS, defaultConfig, builtinModel } from './data.js';
+import { POINTS, defaultConfig, builtinModel, movieQuestions } from './data.js';
 import { putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame, cloud, onCloudChange, getAdminKey, setAdminKey, checkAdminKey, publishAll, loadCloudConfig, deviceOnlyMedia, pushCloud } from './storage.js';
 import { defaultSticker } from './characters.js';
 
@@ -19,6 +19,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
   const cfg = structuredClone(config);
   let tab = 'characters';
   let qCat = 0;
+  let movieArm = false;
   let timer = null;
   const changed = (what = 'content', immediate = false) => {
     clearTimeout(timer);
@@ -154,7 +155,10 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
           </div>
         </div>`;
       }));
-      return `<div class="cat-switch">${cfg.categories.map((c, i) => `<button class="tab ${qCat === i ? 'on' : ''}" data-qcat="${i}" style="--cat:${c.color}">${esc(c.icon)} ${esc(c.name)}</button>`).join('')}</div>${items.join('')}`;
+      return `<div class="cat-switch">${cfg.categories.map((c, i) => `<button class="tab ${qCat === i ? 'on' : ''}" data-qcat="${i}" style="--cat:${c.color}">${esc(c.icon)} ${esc(c.name)}</button>`).join('')}</div>
+        <div class="movie-pack"><span>🎬 <b>Guess the movie</b> pack — 5 minimal posters (text removed) with the real poster on reveal.</span>
+          <button class="btn-mini" data-moviepack>${movieArm ? '⚠ Click again to replace this column' : `Load into “${esc(cfg.categories[qCat].name)}”`}</button></div>
+        ${items.join('')}`;
     }
     if (tab === 'final') {
       const f = cfg.final;
@@ -219,7 +223,19 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
     const tb = t.closest('[data-tab]');
     if (tb) { tab = tb.dataset.tab; return render(); }
     const qc = t.closest('[data-qcat]');
-    if (qc) { qCat = +qc.dataset.qcat; return render(); }
+    if (qc) { qCat = +qc.dataset.qcat; movieArm = false; return render(); }
+    if (t.closest('[data-moviepack]')) {
+      // two clicks: the first arms it (it replaces all 5 questions of this column)
+      if (!movieArm) { movieArm = true; return render(); }
+      movieArm = false;
+      cfg.questions[qCat] = movieQuestions();
+      const cat = cfg.categories[qCat];
+      if (!/movie/i.test(cat.name)) { cat.name = 'MOVIES'; }
+      cat.icon = '🎬';
+      cat.description = 'Guess the movie from a minimal poster';
+      changed('content', true);
+      return render();
+    }
     const pv = t.closest('[data-preview]');
     if (pv) return previewCharacter?.(pv.dataset.preview);
     const qpv = t.closest('[data-qpreview]');

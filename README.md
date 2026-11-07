@@ -252,6 +252,10 @@ dropping in a wave, a dance or a cheer every few seconds.
 - `public/models/yacht.glb` + `yacht-layout.json` — the party yacht, built with `tools/blender/yacht.py`.
 - `public/models/env/*` — the Sea of Cortez scenery built with the Blender scripts above.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.
+- `public/img/movies/` — the **MOVIES** column (“GUESS THE MOVIE”): minimal posters with all text removed by
+  GPT Image 2 on fal (`tools/movies/notext.mjs`) as the clue, and the official poster (Wikipedia, upscaled 4× with
+  ESRGAN on fal, `tools/movies/upscale.mjs`) on reveal. Setup → Questions has a **Load the Guess-the-movie pack**
+  button (click twice) that fills the current column with these 5.
 - Everything else (water and sky shaders, characters, board, deck props, sounds and music) is procedural.
 
 ## Performance & stability

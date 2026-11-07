@@ -68,8 +68,22 @@ export function defaultCategories() {
     { id: 'boys', name: 'THE BOYS', icon: '👦', color: '#3d8bfd', transition: 'album', description: 'All about the four guys' },
     { id: 'lore', name: 'BRO LORE', icon: '🍻', color: '#f08c2e', transition: 'chest', description: 'Legendary friendship stories' },
     { id: 'man', name: 'KNOW YOUR MAN', icon: '❤️', color: '#ff5a7a', transition: 'heart', description: 'How well do you know him?' },
-    { id: 'lapaz', name: 'LA PAZ', icon: '🌴', color: '#14b8a6', transition: 'dive', description: 'Baja California Sur trivia' },
+    { id: 'movies', name: 'MOVIES', icon: '🎬', color: '#14b8a6', transition: 'dive', description: 'Guess the movie from a minimal poster' },
     { id: 'wild', name: 'WILD CARD', icon: '🎲', color: '#a855f7', transition: 'wheel', description: 'Anything goes' },
+  ];
+}
+
+/** The MOVIES column: a minimal poster (text removed) as the clue, the real poster on reveal. Easiest first. */
+export function movieQuestions() {
+  const M = (key, answer, explanation) => Q('GUESS THE MOVIE', answer, {
+    format: 'image', image: `img/movies/${key}_clue.jpg`, answerImage: `img/movies/${key}_answer.jpg`, explanation,
+  });
+  return [
+    M('monsters', 'Monsters, Inc. (2001)', 'Mike’s one big eye and Sulley’s blue fur'),
+    M('parasite', 'Parasite (2019)', 'The rain, the stairs down to the semi-basement'),
+    M('leon', 'Léon: The Professional (1994)', 'His round sunglasses, the milk carton and the gun'),
+    M('dragon', 'How to Train Your Dragon (2010)', 'Toothless’s tail — one fin is Hiccup’s prosthetic'),
+    M('freddy', 'Freddy Got Fingered (2001)', 'Tom Green: “Daddy, would you like some sausage?”'),
   ];
 }
 
@@ -109,13 +123,7 @@ export function defaultQuestions() {
       Q('What did your man want to be when he grew up?', 'He decides!'),
       Q('Finish your man’s famous catchphrase.', 'He decides!', { funny: true }),
     ],
-    [
-      Q('What body of water is La Paz on?', 'The Sea of Cortez (Gulf of California)'),
-      Q('What gentle giant can you swim with near La Paz in winter?', 'The whale shark (“tiburón ballena”)', { format: 'image', image: 'img/whale-shark.jpg' }),
-      Q('Which protected island off La Paz is famous for its sea lion colony?', 'Isla Espíritu Santo (Los Islotes)'),
-      Q('What is the name of La Paz’s famous seaside promenade?', 'El Malecón'),
-      Q('What is the name of this beach, famous for its mushroom-shaped rock?', 'Playa Balandra (El Hongo)', { format: 'image', image: 'img/balandra.jpg' }),
-    ],
+    movieQuestions(),
     [
       Q('Which couple has been together the longest?', 'Host decides!'),
       Q('Who is most likely to say “one more and we go home”?', 'Host decides!', { funny: true }),
