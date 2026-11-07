@@ -18,12 +18,13 @@ export const BUILTIN_MODELS = {
   baby: 'models/characters/baby.glb',
   pau: 'models/characters/pau.glb',
   karla: 'models/characters/karla.glb',
+  caro: 'models/characters/caro.glb',
 };
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
 const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Gus'];
-const GIRL_NAMES = ['Karla', 'Pau', 'Baby', 'Girl 4'];
+const GIRL_NAMES = ['Karla', 'Pau', 'Baby', 'Caro'];
 
 const TAGLINES = {
   boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
