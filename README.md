@@ -187,23 +187,24 @@ Click **⚙ Game Setup** on the main menu. Everything saves in the browser as yo
 
 Game progress also auto-saves, so a refresh offers **Continue saved game**.
 
-## 3D characters (Tripo → Blender rig → game)
+## 3D characters (Meshy → Blender rig → game)
 
-Each person is generated with **Tripo (image-to-3D on fal.ai)** from a T-pose picture, then rigged and animated by
+Each person is generated with **Meshy v6 (image-to-3D on fal.ai)** from a T-pose picture, then rigged and animated by
 `tools/blender/character.py`, so every character ends up with:
 
 - the **same height** (2.0 units, feet on the floor, facing forward) and the **same 19-bone skeleton** at the same
   proportional joint heights — so every animation clip works on every character;
 - a **rigid head**: the face is weighted 100% to the head bone, so the expression never deforms;
 - clips **idle, idle2, excited, dance, wave, walk** (plus a spare `sit`);
-- mid-weight files: full 40k-triangle mesh, 2K color texture, 1K normal + roughness (webp) — about 2 MB each.
+- mid-weight files: ~40k-triangle mesh, 2K color texture, 1K normal + roughness (webp) — about 3 MB each.
 
 ```bash
-pip install bpy            # Blender as a Python module
-BLENDER_PY=python3 tools/characters/build.sh joe +x   # tools/characters/joe_tripo.glb -> public/models/characters/joe.glb
+FAL_KEY=... node tools/characters/generate.mjs tools/characters/maria_ref.jpg maria   # -> tools/characters/maria_src.glb
+pip install bpy                                                                      # Blender as a Python module
+BLENDER_PY=python3 tools/characters/build.sh maria                                   # -> public/models/characters/maria.glb
 ```
 
-`+x` is the direction the raw Tripo model faces. Register new characters in `BUILTIN_MODELS` (`src/data.js`).
+Register new characters in `BUILTIN_MODELS` (`src/data.js`).
 `tools/character-viewer.html?model=joe` (on the dev server) shows every clip side by side.
 
 On deck everyone stands in an arc behind the start pedestal, facing center stage, looping their idles and
@@ -211,7 +212,7 @@ dropping in a wave, a dance or a cheer every few seconds.
 
 ## Assets
 
-- `public/models/characters/*.glb` — rigged characters (Tripo + `tools/blender/character.py`).
+- `public/models/characters/*.glb` — rigged characters (Meshy v6 + `tools/blender/character.py`).
 - `public/models/yacht.glb` + `yacht-layout.json` — the party yacht, built with `tools/blender/yacht.py`.
 - `public/models/env/*` — the Sea of Cortez scenery built with the Blender scripts above.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.

@@ -1,6 +1,6 @@
-"""Rig + animate a Tripo character for Compitas Trivia.
+"""Rig + animate a Meshy character for Compitas Trivia.
 
-    python tools/blender/character.py tools/characters/joe_tripo.glb public/models/characters/joe.glb [--facing +x]
+    python tools/blender/character.py tools/characters/joe_src.glb public/models/characters/joe.glb [--facing -y]
 
 Every character goes through the same pipeline so they all share:
   * the same height (2.0 units, feet at y = 0, facing +z in game space),
@@ -61,6 +61,20 @@ def load(path, facing):
         v.co = Vector(((v.co.x - cx) * s, (v.co.y - cy) * s, (v.co.z - zmin) * s))
     obj.data.update()
     obj.name = 'body'
+    # Meshy ships an all-black emissive texture: drop it (22 MB of GPU memory for nothing)
+    for mat in obj.data.materials:
+        if not mat or not mat.use_nodes:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type == 'BSDF_PRINCIPLED':
+                for name in ('Emission Color', 'Emission'):
+                    inp = node.inputs.get(name)
+                    if inp:
+                        for link in list(inp.links):
+                            mat.node_tree.links.remove(link)
+                        inp.default_value = (0, 0, 0, 1)
+                if node.inputs.get('Emission Strength'):
+                    node.inputs['Emission Strength'].default_value = 0.0
     return obj
 
 
@@ -247,15 +261,16 @@ def anim_idle(t, T):
 
 
 def anim_idle2(t, T):
+    """Relaxed weight shift from foot to foot, arms loose, looking around the party."""
     w = 2 * math.pi * t / T
     shift = S(w)
-    p = arms_down({}, 1.25, 1.1)
-    # right hand on the hip
-    p['upperarm.R'] = [(Z, 1.0), (Y, 0.5)]
-    p['forearm.R'] = [(Y, -1.5)]
+    p = arms_down({}, 1.3 + 0.04 * shift, 1.3 - 0.04 * shift, 0.25)
+    p['upperarm.L'].append((X, -0.12 + 0.06 * shift))   # one hand a little forward, the other back
+    p['upperarm.R'].append((X, 0.1 + 0.06 * shift))
     p['_hips_offset'] = (0.035 * shift, -0.01 * abs(shift), 0)
     p['hips'] = [(Z, -0.05 * shift)]
     p['spine'] = [(Z, 0.04 * shift)]
+    p['chest'] = [(Y, 0.06 * S(w * 0.5))]
     p['head'] = [(Y, 0.35 * S(w * 0.5)), (Z, 0.05 * shift)]
     p['thigh.L'] = [(Z, 0.04 * shift)]
     p['thigh.R'] = [(Z, 0.04 * shift)]
@@ -306,13 +321,13 @@ def anim_dance(t, T):
 
 def anim_wave(t, T):
     w = 2 * math.pi * t / T
-    p = arms_down({}, 1.2, 0)
-    # right elbow out at shoulder height, forearm up, waving side to side ("hello!")
-    p['upperarm.R'] = [(Z, -0.45), (X, -0.25)]
-    p['forearm.R'] = [(Z, -1.15 + 0.4 * S(w * 3))]
-    p['hand.R'] = [(Z, 0.15 * S(w * 3 - 0.6))]
-    p['chest'] = [(Z, 0.05), (Y, -0.08)]
-    p['head'] = [(Z, 0.1 + 0.04 * S(w)), (Y, -0.08)]
+    p = arms_down({}, 1.25, 0)
+    # right upper arm out to the side, forearm straight up, hand swinging side to side ("hello!")
+    p['upperarm.R'] = [(Z, -0.15), (X, -0.3)]
+    p['forearm.R'] = [(Z, -1.35 + 0.35 * S(w * 3))]
+    p['hand.R'] = [(Z, 0.2 * S(w * 3 - 0.6))]
+    p['chest'] = [(Z, 0.05), (Y, -0.1)]
+    p['head'] = [(Z, 0.08 + 0.04 * S(w)), (Y, -0.12)]
     p['_hips_offset'] = (0, 0.02 * abs(S(w * 1.5)), 0)
     return p
 
@@ -407,7 +422,7 @@ def export(path, objs):
 
 def main(argv):
     src, dst = argv[0], argv[1]
-    facing = '+x'
+    facing = '-y'  # Meshy v6 output faces -y in Blender
     if '--facing' in argv:
         facing = argv[argv.index('--facing') + 1]
     obj = load(src, facing)
