@@ -222,6 +222,17 @@ def find_long_hair(obj, m):
     spread = np.median(np.linalg.norm(cols[back] - hair, axis=1))
     head_w = np.percentile(np.abs(P[head, 0]), 98)
     near = np.linalg.norm(cols - hair, axis=1) < max(0.1, min(0.16, spread * 2.2))
+    # hair with strong highlights/shadows: also accept anything brown and clearly darker than the skin
+    # (skin colour from the hands)
+    hands0 = np.abs(P[:, 0]) > m['reach'] * 0.85
+    if hands0.sum() > 20:
+        sk = np.median(cols[hands0], axis=0)
+        lum = cols @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+        sk_lum = float(sk @ np.array([0.2126, 0.7152, 0.0722], np.float32))
+        mx, mn = cols.max(1), cols.min(1)
+        hue = np.where(mx - mn < 1e-5, 0, ((cols[:, 1] - cols[:, 2]) / np.maximum(mx - mn, 1e-5)) / 6.0) % 1.0  # red-max hue
+        brown = (cols[:, 0] >= cols[:, 1]) & (cols[:, 1] >= cols[:, 2] * 0.9) & (hue < 0.12)
+        near |= brown & (lum < sk_lum * 0.72) & (np.linalg.norm(cols - sk, axis=1) > 0.15)
     zone = (P[:, 1] > ay - 0.6) & (np.abs(P[:, 0]) < head_w * 1.1)
     # flood from the hair on the head down through connected hair-coloured vertices, so a beard,
     # chest hair or dark shorts elsewhere on the body don't count
@@ -281,7 +292,7 @@ def find_long_hair(obj, m):
     members = member_all
     idx = [i for r in seen for i in members.get(r, ()) if P[i, 1] <= neck + 0.04]
     print('long hair: colour', hair.round(3), 'vertices below the neck:', len(idx))
-    return set(idx) if len(idx) > 1500 else set()   # a beard, necklace or curls at the nape isn't long hair
+    return set(idx) if len(idx) > 4000 else set()   # a beard, necklace or curls at the nape isn't long hair
 
 
 def skin(obj, rig, J, m):
