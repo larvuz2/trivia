@@ -92,7 +92,20 @@ def measure(obj):
     torso = [abs(x) for x, y, z in pts if abs(y - (arm_y - 0.16)) < 0.03]
     torso.sort()
     torso_w = torso[int(len(torso) * 0.97)] if torso else 0.3
-    return {'arm_y': arm_y, 'reach': reach, 'torso_w': torso_w}
+    # neck: the narrowest slice between the shoulders and the head (front-to-back centre only,
+    # so a collar or hair hanging behind doesn't count). Proportions differ per character.
+    best = None
+    for k in range(int((arm_y + 0.05) / 0.02), int((arm_y + 0.45) / 0.02)):
+        y = k * 0.02
+        xs = sorted(abs(x) for x, yy, z in pts if abs(yy - y) < 0.012)
+        if len(xs) < 20:
+            continue
+        w = xs[int(len(xs) * 0.95)]
+        if best is None or w < best[1]:
+            best = (y, w)
+    neck_y = best[0] if best else 0.52 * HEIGHT
+    neck_y = max(arm_y + 0.06, neck_y)
+    return {'arm_y': arm_y, 'reach': reach, 'torso_w': torso_w, 'neck_y': neck_y}
 
 
 # --------------------------------------------------------------------------- skeleton
@@ -106,8 +119,8 @@ def joints(m):
         'hips': ((0, 0.27 * H, 0), (0, 0.33 * H, 0)),
         'spine': ((0, 0.33 * H, 0), (0, 0.40 * H, 0)),
         'chest': ((0, 0.40 * H, 0), (0, ay + 0.02, 0)),
-        'neck': ((0, ay + 0.02, 0), (0, 0.52 * H, 0)),
-        'head': ((0, 0.52 * H, 0), (0, 0.98 * H, 0)),
+        'neck': ((0, ay + 0.02, 0), (0, m['neck_y'], 0)),
+        'head': ((0, m['neck_y'], 0), (0, 0.98 * H, 0)),
     }
     for side, s in (('L', 1), ('R', -1)):
         u0 = sx + (rx - sx) * 0.0
@@ -167,13 +180,13 @@ def skin(obj, rig, J, m):
     segs = {n: (Vector(h), Vector(t)) for n, (h, t) in J.items()}  # game space
     ay = m['arm_y']
     sx = m['torso_w'] * 0.62
-    neck_y = 0.52 * HEIGHT
+    neck_y = m['neck_y']
     hip_y = 0.27 * HEIGHT
     for v in obj.data.vertices:
         p = Vector((v.co.x, v.co.z, -v.co.y))
         side = 'L' if p.x >= 0 else 'R'
         ax = abs(p.x)
-        if p.y > neck_y + 0.04 and ax < sx * 1.6:
+        if p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25):  # wide hair/ears too
             cands = ['head']                                   # rigid head: the face never deforms
         elif p.y > neck_y - 0.04 and ax < sx * 1.4:
             cands = ['head', 'neck']

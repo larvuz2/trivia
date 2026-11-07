@@ -12,11 +12,12 @@ const COLORS = {
 // A model uploaded in Setup always wins over these.
 export const BUILTIN_MODELS = {
   joe: 'models/characters/joe.glb',
+  ray: 'models/characters/ray.glb',
 };
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
-const BOY_NAMES = ['Joe', 'Guy 2', 'Guy 3', 'Guy 4'];
+const BOY_NAMES = ['Joe', 'Ray', 'Guy 3', 'Guy 4'];
 
 const TAGLINES = {
   boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
