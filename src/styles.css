@@ -619,3 +619,10 @@ textarea { resize: vertical; }
 .q-img-label { font-size: 12px; font-weight: 700; opacity: 0.7; }
 .q-img-arrow { font-weight: 700; opacity: 0.5; padding: 0 2px; }
 .q-preview-btn { margin-left: auto; font-weight: 700; }
+
+/* ---------- curtain call on the swim platform ---------- */
+.farewell { position: fixed; top: 6vh; left: 0; right: 0; text-align: center; pointer-events: none; color: #fff; }
+.fw-kicker { font-family: var(--display); color: var(--gold); letter-spacing: 6px; font-size: clamp(14px, 1.6vw, 22px); text-shadow: 0 2px 10px rgba(0,0,0,0.5); animation: rise-in 0.6s 0.2s both; }
+.fw-title { font-family: var(--display); font-size: clamp(36px, 6vw, 88px); line-height: 1; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; text-shadow: 0 6px 0 rgba(0,0,0,0.25); animation: slam 0.7s 0.4s cubic-bezier(.2,1.6,.4,1) both; }
+.fw-hint { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); color: #fff; font-weight: 700; font-size: 14px; background: rgba(26,36,73,0.6); padding: 8px 18px; border-radius: 99px; animation: rise-in 0.6s 1.5s both; }
+#ui .screen.screen-farewell { cursor: pointer; pointer-events: auto; }

@@ -625,7 +625,7 @@ async function startTurn(splashIntro = true) {
   game.current = null;
   persist();
   clearGuests();
-  if (G.remaining(game) === 0) return config.settings.finalSplash ? showFinalIntro() : showResults();
+  if (G.remaining(game) === 0) return config.settings.finalSplash ? showFinalIntro() : showFarewell();
   world.setParty((25 - G.remaining(game)) / 25);
   setMusicState('game', 1.2);
   const team = game.turn;
@@ -708,7 +708,7 @@ function showBoardPanel() {
     if (!a) return;
     sfx('click');
     if (a === 'undo') doUndo();
-    if (a === 'final') config.settings.finalSplash ? showFinalIntro() : showResults();
+    if (a === 'final') config.settings.finalSplash ? showFinalIntro() : showFarewell();
     if (a === 'menu') { persist(); showMenu(); }
     if (a === 'adj') showAdjust();
   });
@@ -1248,7 +1248,7 @@ async function showFinalQuestion() {
       if (game.final.results.every((x) => x !== null)) {
         await wait(2600);
         game.finalDone = true;
-        showResults();
+        showFarewell();
       }
     }
   });
@@ -1258,6 +1258,74 @@ function finalReveal() {
   stopTimer();
   revealAnswer(true);
   qScreen?.querySelector('.final-judge')?.classList.remove('hidden');
+}
+
+// ------------------------------------------------------------------
+// 7½. CURTAIN CALL — the whole gang on the swim platform under the yacht's name
+// ------------------------------------------------------------------
+// stage space (deck = 0): the swim platform top is 2.2 below the deck, from the transom (z -9.0) back to z -12.2;
+// the COMPITAS name board is on the transom above it.
+const STERN = { y: -2.2, z: -11.55, cam: [0, 1.75, -18.6], look: [0, -1.2, -9.4] };   // final framing: the name reads over their heads
+let farewellTimer = null;
+function showFarewell() {
+  stopTimer();
+  game.phase = 'farewell';
+  clearGuests();
+  world.setSpotlight(null);
+  world.setParty(1);
+  dj?.pop(false, true);
+  setMusicState('party', 0.8);
+  rig.setShift(0);
+  rig.stopOrbit?.();
+  // couples side by side in one row, facing the camera out on the water
+  const row = [0, 1, 2, 3].flatMap((cp) => [girlOf(cp), boyOf(cp)]).filter(Boolean);
+  row.forEach((c, i) => {
+    const x = (i - (row.length - 1) / 2) * 1.05;
+    c.target = null;
+    c.place(x, STERN.z + (i % 2 ? 0.2 : -0.1), Math.PI + x * 0.03, 'idle');
+    c.root.position.y = STERN.y;
+    c.showName(false);
+    c.noEmotes = true;   // keep the yacht's name clear of emoji bubbles
+    c.emote.visible = false;
+    c.pop(true, true);
+  });
+  if (startLabel) startLabel.visible = false;
+  // a gentle push-in that ends on the final framing
+  rig.cut(sw(STERN.cam[0], STERN.cam[1] + 0.35, STERN.cam[2] - 1.4), sw(...STERN.look), 44);
+  rig.shot(sw(...STERN.cam), sw(...STERN.look), 6, 'inOut');
+  // a few cheer at a time, the rest idle — alternating
+  clearInterval(farewellTimer);
+  farewellTimer = setInterval(() => {
+    if (game.phase !== 'farewell') return clearInterval(farewellTimer);
+    for (const c of row) if (c.state === 'idle' && Math.random() < 0.3) c.react('cheer', 1.4 + Math.random() * 1.2);
+    if (Math.random() < 0.5) confetti.burst(sw((Math.random() < 0.5 ? -1 : 1) * (3.2 + Math.random() * 1.6), STERN.y + 1.2, STERN.z + 0.2), 60, { up: 6 });  // at the sides, never over the name
+  }, 900);
+  row.forEach((c, i) => setTimeout(() => c.react('cheer', 2), 200 + i * 120));
+  confetti.burst(sw(-4.2, STERN.y + 1.0, STERN.z), 140, { up: 9 });
+  confetti.burst(sw(4.2, STERN.y + 1.0, STERN.z), 140, { up: 9 });
+  sfx('cheer');
+  sfx('fanfare');
+  const n = setScreen(`
+    <div class="farewell">
+      <div class="fw-kicker">THAT'S A WRAP!</div>
+      <div class="fw-title">GRACIAS, COMPITAS</div>
+    </div>
+    <div class="fw-hint">Click to see the champions →</div>
+  `, 'screen-farewell');
+  let done = false;
+  const go = () => {
+    if (done) return;
+    done = true;
+    clearInterval(farewellTimer);
+    window.removeEventListener('keydown', onKey, true);
+    // back up on deck before the champions screen moves everyone around
+    characters.forEach((c) => { c.root.position.y = 0; c.noEmotes = false; });
+    hangOut(true);
+    showResults();
+  };
+  const onKey = (e) => { if ([' ', 'Enter', 'ArrowRight'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); go(); } };
+  window.addEventListener('keydown', onKey, true);
+  n.addEventListener('click', go);
 }
 
 // ------------------------------------------------------------------
@@ -1424,7 +1492,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
+window.yct = { showFarewell: (g) => { if (g) game = Object.assign(G.newGame(), g); showFarewell(); }, THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
 
 loop();
 init();

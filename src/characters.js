@@ -403,7 +403,7 @@ export class Character {
     if (state === 'sad') this.showEmote('sad', 2.4);
     if (state === 'laugh') this.showEmote('laugh', 2.2);
     if (state === 'surprise') this.showEmote('surprise', 1.6);
-    if (state === 'cheer' && Math.random() < 0.5) this.showEmote('cheer', 1.8);
+    if (state === 'cheer' && !this.noEmotes && Math.random() < 0.5) this.showEmote('cheer', 1.8);
   }
 
   react(state, dur = 2.4) {

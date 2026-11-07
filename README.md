@@ -70,7 +70,9 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
 8. **Question** — the host scores it. On a miss the other team's player pops onto deck to steal.
    If the question is about one of the boys, he pops in to react; Ask the Boys brings the team's boys over for a hint.
 9. **Final Splash** — secret wagers, one last question.
-10. **Yacht champions** — the winners dance around the START button, the losers sulk on the sofas.
+10. **Curtain call** — the whole gang lines up on the swim platform at the very back of the yacht, under the
+    COMPITAS name board, cheering in waves (a few at a time, the rest idle) with confetti. Click / Space to continue.
+11. **Yacht champions** — the winners dance around the START button, the losers sulk nearby.
 
 The sky slowly turns from afternoon to golden hour to a party night as the board empties, and the yacht's LEDs,
 neon sign, string lights, hot tub and dance floor glow brighter.
