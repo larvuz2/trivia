@@ -645,3 +645,7 @@ textarea { resize: vertical; }
 .mv-phone.hidden { display: none; }
 .mv-rec { position: absolute; top: 12px; left: 16px; color: #ff4d5e; font-weight: 800; font-size: 13px; letter-spacing: 0.1em; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.2; } }
+
+/* shown for a moment if the graphics context has to be recovered */
+.gl-recover { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: #1a2449; color: #fff;
+  font-family: var(--display); font-size: clamp(20px, 3vw, 34px); letter-spacing: 0.04em; }

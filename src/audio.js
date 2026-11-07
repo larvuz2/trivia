@@ -260,6 +260,12 @@ export function startMusic() {
   musicGain.gain.setTargetAtTime(enabled.music ? 0.32 : 0, c.currentTime, 0.5);
   seq = { step: 0, next: c.currentTime + 0.1 };
   const pump = () => {
+    // fell behind (background tab throttles timers): skip the missed steps instead of firing them all at once
+    if (seq.next < c.currentTime - 0.05) {
+      const missed = Math.ceil((c.currentTime - seq.next) / STEP);
+      seq.next += missed * STEP;
+      seq.step += missed;
+    }
     while (seq.next < c.currentTime + 0.15) {
       scheduleStep(seq.step, seq.next);
       seq.next += STEP;

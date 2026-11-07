@@ -243,6 +243,7 @@ export class IntroDirector {
     rig.fovTarget = 38;
     rig.setShift(-0.14);
     rig.follow(() => {
+      if (!this.cruise) return null;   // the cinematic ended (or was skipped)
       const yz = w.yacht.position.z;
       return { pos: new THREE.Vector3(12.5, 0.55, -34 + this.cruise.t * 1.6), look: new THREE.Vector3(0, 6.2, yz + 14) };
     });
@@ -255,6 +256,7 @@ export class IntroDirector {
     this.rig.setShift(0);
     this.rig.fovTarget = 44;
     this.rig.follow(() => {
+      if (!this.gulls?.includes(lead)) return null;
       // side-on tracking shot: gull in profile on the left third, the yacht ahead of it on the right
       const p = lead.o.position;
       return { pos: p.clone().add(new THREE.Vector3(-9.5, 0.2, -2)), look: p.clone().add(new THREE.Vector3(0, -1.2, 5.2)) };
@@ -332,6 +334,7 @@ export class IntroDirector {
   async endCinematic(alreadyBlack = false) {
     if (!alreadyBlack) await this.fade(1, 300);
     this.setCaption('');
+    if (this.rig.followFn) this.rig.followFn = null;   // stop tracking the cinematic's subjects
     this.cruise = null;
     this.clearGulls();
     const w = this.world;

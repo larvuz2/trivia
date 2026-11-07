@@ -135,10 +135,30 @@ async function init() {
   document.getElementById('loading').classList.add('done');
   setTimeout(() => document.getElementById('loading')?.remove(), 900);
   showMenu(true);
+  // came back from a graphics-context recovery: drop straight back into the saved game
+  let resume = false;
+  try { resume = sessionStorage.getItem('yct.resume') === '1'; sessionStorage.removeItem('yct.resume'); } catch {}
+  if (resume && savedGame && ['board', 'question', 'final'].includes(savedGame.phase)) setTimeout(() => continueGame(), 600);
 }
 
+// ------------------------------------------------------------------
+// Never die: if the browser drops the WebGL context (GPU reset, memory pressure, sleep/wake), save, reload and
+// resume the game where it was. Stray errors are logged, never fatal.
+// ------------------------------------------------------------------
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  try { persist(); } catch {}
+  try { sessionStorage.setItem('yct.resume', '1'); } catch {}
+  const note = document.createElement('div');
+  note.className = 'gl-recover';
+  note.textContent = 'Recovering graphics… your game is saved';
+  document.body.appendChild(note);
+  setTimeout(() => location.reload(), 1200);
+});
+window.addEventListener('unhandledrejection', (e) => { console.error('unhandled promise rejection (game keeps running)', e.reason); e.preventDefault(); });
+
 function buildCharacters() {
-  for (const c of characters) world.stage.remove(c.root);
+  for (const c of characters) { world.stage.remove(c.root); c.clearModel(); }
   characters = config.characters.map((d, i) => {
     const ch = new Character(d, i);
     world.stage.add(ch.root);
@@ -1485,31 +1505,76 @@ window.addEventListener('keydown', (e) => {
 // ------------------------------------------------------------------
 const clock = new THREE.Clock();
 let maxDt = 0.05; // frame step cap (raised only by automated tests on very slow renderers)
+
+// Crash-proof frame: every system runs in its own try/catch, so one bad frame in one system (a character, the
+// movie, the foam…) can never stop the game. Each error is logged once per system, not every frame.
+const perf = { t: {}, frames: 0, errors: {} };
+function safe(name, fn) {
+  const t0 = performance.now();
+  try { fn(); } catch (e) {
+    if (!perf.errors[name]) console.error(`[${name}] frame error (the game keeps running)`, e);
+    perf.errors[name] = (perf.errors[name] || 0) + 1;
+  }
+  perf.t[name] = (perf.t[name] || 0) * 0.95 + (performance.now() - t0) * 0.05; // smoothed ms
+}
+function disposeTree(root) {
+  root.traverse((o) => {
+    o.geometry?.dispose?.();
+    for (const m of o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []) {
+      for (const k in m) if (m[k]?.isTexture) m[k].dispose();
+      m.dispose?.();
+    }
+  });
+}
+// Adaptive resolution: full sharpness (up to 2x on retina) whenever the machine keeps up; if the frame rate stays
+// under ~33 fps it renders a notch softer (never below 1x), and goes back up once there is headroom again.
+const maxPR = Math.min(window.devicePixelRatio || 1, 2);
+const res = { pr: maxPR, ema: 16, last: performance.now(), slow: 0, fast: 0, hold: 3 };
+function adaptResolution() {
+  const now = performance.now();
+  const ft = now - res.last;
+  res.last = now;
+  if (document.hidden || ft > 250 || maxDt !== 0.05) return;   // tab switches / automated slow-renderer tests
+  res.ema = res.ema * 0.95 + ft * 0.05;
+  const s = ft / 1000;
+  res.hold -= s;
+  if (res.hold > 0) return;
+  if (res.ema > 30) { res.slow += s; res.fast = 0; } else if (res.ema < 18) { res.fast += s; res.slow = 0; } else { res.slow = 0; res.fast = 0; }
+  if (res.slow > 2 && res.pr > 1) { res.pr = Math.max(1, res.pr - 0.25); renderer.setPixelRatio(res.pr); res.slow = 0; res.hold = 4; }
+  if (res.fast > 8 && res.pr < maxPR) { res.pr = Math.min(maxPR, res.pr + 0.25); renderer.setPixelRatio(res.pr); res.fast = 0; res.hold = 4; }
+}
+perf.res = res;
+
 function loop() {
+  requestAnimationFrame(loop);   // schedule first: nothing below can stop the next frame
   const dt = Math.min(clock.getDelta(), maxDt);
-  world.update(dt);
-  env?.update(dt, world.party);
-  director?.update(dt);
-  explore?.update(dt);
-  movie?.update(dt);
-  dj?.update(dt);
-  for (const c of characters) c.update(dt);
-  if (startLabel?.visible) {
+  perf.frames++;
+  safe('world', () => world.update(dt));
+  safe('env', () => env?.update(dt, world.party));
+  safe('intro', () => director?.update(dt));
+  safe('explore', () => explore?.update(dt));
+  safe('movie', () => movie?.update(dt));
+  safe('dj', () => dj?.update(dt));
+  safe('characters', () => { for (const c of characters) c.update(dt); });
+  safe('label', () => {
+    if (!startLabel?.visible) return;
     startLabel.position.y = startLabel.userData.base + Math.sin(world.clock * 2.2) * 0.12;
     const s = world.startHover ? 1.12 : 1;
     startLabel.scale.set(2.9 * s, 0.9 * s, 1);
-  }
-  props = props.filter((p) => {
-    p.t += dt;
-    const alive = p.update(p.t, dt);
-    if (!alive) scene.remove(p.group);
-    return alive;
   });
-  confetti.update(dt);
-  splash.update(dt);
-  rig.update(dt);
-  renderer.render(scene, camera);
-  requestAnimationFrame(loop);
+  safe('props', () => {
+    props = props.filter((p) => {
+      p.t += dt;
+      let alive = false;
+      try { alive = p.update(p.t, dt); } catch (e) { console.error('category prop failed', e); }
+      if (!alive) { scene.remove(p.group); disposeTree(p.group); }   // free its GPU memory too
+      return alive;
+    });
+  });
+  safe('fx', () => { confetti.update(dt); splash.update(dt); });
+  safe('camera', () => rig.update(dt));
+  safe('render', () => renderer.render(scene, camera));
+  adaptResolution();
 }
 
 window.addEventListener('resize', () => {
@@ -1522,7 +1587,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { movie: () => movie, showFarewell: (g) => { if (g) game = Object.assign(G.newGame(), g); showFarewell(); }, THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
+window.yct = { perf, renderer, movie: () => movie, showFarewell: (g) => { if (g) game = Object.assign(G.newGame(), g); showFarewell(); }, THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
 
 loop();
 init();

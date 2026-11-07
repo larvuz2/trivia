@@ -251,6 +251,21 @@ dropping in a wave, a dance or a cheer every few seconds.
 - `public/img/*.jpg` — La Paz question illustrations generated with **FLUX on fal.ai**.
 - Everything else (water and sky shaders, characters, board, deck props, sounds and music) is procedural.
 
+## Performance & stability
+
+- **Crash-proof loop**: the next frame is scheduled first and every system (world, scenery, intro, movie,
+  characters, camera, render…) runs in its own try/catch — an error is logged once, the game keeps going.
+- **Graphics recovery**: if the browser drops the WebGL context (GPU reset, memory pressure, sleep/wake) the game
+  saves, reloads and drops straight back into the saved game.
+- **Adaptive resolution**: full sharpness (up to 2× on retina) whenever the machine keeps up; only if it stays under
+  ~33 fps does it render a notch softer, and it climbs back when there is headroom.
+- **Batched bottles**: the 60 bar bottles (physics props) are drawn as one merged mesh per material while they
+  stand still (~240 → ~22 draw calls, no shadow pass); explore mode swaps the real physics bottles back in.
+  Overall ~460 → ~190 draw calls per frame.
+- **No leaks**: category transition props, per-scene movie geometry and replaced character models free their GPU
+  memory; hidden characters skip their animation work; the music sequencer never bursts after a background tab.
+- `window.yct.perf` shows per-system frame timings (ms) and error counts.
+
 ## Code map
 
 | File | Responsibility |

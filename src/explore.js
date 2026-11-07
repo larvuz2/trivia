@@ -74,6 +74,7 @@ export class ExploreMode {
     };
     this.props = [];
     const visit = (node) => {
+      if (node.userData?.batch) return;   // the merged display copy of the bottles (world.batchBottles)
       if (node.userData?.dyn) { this.addProp(node); return; }
       // thin overhead decorations (string-light wires, bulbs) aren't solid
       const matName = node.material?.name;
@@ -147,6 +148,7 @@ export class ExploreMode {
     await this.ensurePhysics();
     this.showLoading(false);
     this.active = true;
+    this.world.setPropBatching?.(false);   // the real physics bottles
     this.chars = this.characters();
     this.setPlayer(index);
     this.spawn();
@@ -163,6 +165,7 @@ export class ExploreMode {
     this.active = false;
     this.keys.clear();
     this.resetProps();
+    this.world.setPropBatching?.(true);    // back to the merged display copy
     this.hud?.remove();
     this.hud = null;
     this.rig.fovTarget = 42;

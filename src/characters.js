@@ -351,7 +351,18 @@ export class Character {
   }
 
   clearModel() {
-    if (this.model) this.body.remove(this.model);
+    if (this.model) {
+      this.body.remove(this.model);
+      // free its GPU memory (each character loads its own copy of its model)
+      this.model.traverse((o) => {
+        o.geometry?.dispose?.();
+        for (const m of o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []) {
+          for (const k in m) if (m[k]?.isTexture) m[k].dispose();
+          m.dispose?.();
+        }
+      });
+      this.mixer?.stopAllAction();
+    }
     this.model = null;
     this.mixer = null;
     this.clips = null;
@@ -459,6 +470,8 @@ export class Character {
 
   update(dt) {
     this.stateTime += dt;
+    // hidden and not popping: skip the animation work (8 characters are hidden in the menu, most of the game shows few)
+    if (!this.root.visible && this.popScale === this.popTarget) return;
     const t = this.stateTime;
     const T = performance.now() / 1000 + this.phase;
     if (this.mixer) this.mixer.update(dt);

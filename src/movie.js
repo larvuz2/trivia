@@ -155,7 +155,10 @@ export class MovieMode {
   cleanup() {
     this.tick = null;
     this.holders = [];
-    for (const o of this.extras) o.parent?.remove(o);
+    for (const o of this.extras) {
+      o.parent?.remove(o);
+      if (o.userData.own) o.traverse((n) => { n.geometry?.dispose?.(); n.material?.dispose?.(); });   // built per scene: free it
+    }
     this.extras = [];
     this.ui?.querySelector('.mv-phone')?.classList.add('hidden');
     const w = this.world;
@@ -554,10 +557,12 @@ export class MovieMode {
     this.put(gab, 5.45, 0, 14.5, Math.PI / 2, 'fish', 0);
     const rod = this.prop('rod', 1);
     const bob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), new THREE.MeshStandardMaterial({ color: '#ff3b3b', roughness: 0.4 }));
+    bob.userData.own = true;
     this.world.scene.add(bob);
     this.extras.push(bob);
     const lineGeo = new THREE.BufferGeometry().setFromPoints([V(0, 0, 0), V(0, 0, 0)]);
     const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: '#e8f4ff', transparent: true, opacity: 0.8 }));
+    line.userData.own = true;
     this.world.scene.add(line);
     this.extras.push(line);
     // the fal/Meshy dorado (nose turned to +x for the jump below), or the Blender one as a fallback

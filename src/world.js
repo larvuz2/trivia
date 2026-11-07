@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Time of day keyframes: clear Baja afternoon -> golden hour -> party night.
 // The game drives this with `party` (0 at the start of the board, 1 when it's cleared).
@@ -125,6 +126,52 @@ export class World {
     this.sky.renderOrder = -10;
     this.scene.add(this.sky);
     this.scene.fog = new THREE.Fog(k.horizon.clone(), 380, 1900);
+  }
+
+  /**
+   * Performance: the 60 bar bottles are separate physics props (explore mode knocks them over), each made of
+   * glass + liquid + label + cap -> ~240 draw calls, plus the same again for shadows. While they stand still they
+   * are drawn as one merged mesh per material (~15 draws, no shadow pass); explore mode swaps the real ones back in.
+   */
+  batchBottles() {
+    const model = this.yachtModel;
+    if (!model) return;
+    model.updateMatrixWorld(true);
+    const inv = model.matrixWorld.clone().invert();
+    const groups = new Map();
+    this.batchedProps = [];
+    model.traverse((o) => {
+      if (!o.isMesh || Array.isArray(o.material)) return;
+      let p = o;
+      while (p && p !== model && !p.userData?.dyn) p = p.parent;
+      if (!p || p === model || !/^dyn_bottle/.test(p.name)) return;
+      if (!this.batchedProps.includes(p)) this.batchedProps.push(p);
+      const g = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+      const key = `${o.material.uuid}|${Object.keys(g.attributes).sort().join(',')}|${g.index ? 'i' : 'n'}`;
+      if (!groups.has(key)) groups.set(key, { mat: o.material, geos: [] });
+      groups.get(key).geos.push(g);
+    });
+    this.propBatch = [];
+    for (const { mat, geos } of groups.values()) {
+      const merged = mergeGeometries(geos, false);
+      geos.forEach((g) => g.dispose());
+      if (!merged) continue;
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.name = 'batch_bottles';
+      mesh.userData.batch = true;      // explore mode's collision builder skips it
+      mesh.castShadow = false;         // tiny bottles in the shade of the overhang: their shadows aren't visible
+      mesh.receiveShadow = true;
+      model.add(mesh);
+      this.propBatch.push(mesh);
+    }
+    if (!this.propBatch.length) return;
+    this.setPropBatching(true);
+  }
+
+  /** true: draw the merged bottles; false: show the individual physics bottles (explore mode). */
+  setPropBatching(on) {
+    for (const m of this.propBatch || []) m.visible = on;
+    for (const p of this.batchedProps || []) p.visible = !on;
   }
 
   // ---------------- Lights ----------------
@@ -506,6 +553,7 @@ export class World {
     this.startButton = get('start_button');
     this.discoBall = get('disco_ball');
     this.tubWater = get('hot_tub_water');
+    this.batchBottles();
     this.floats = ['flamingo', 'donut'].map(get).filter(Boolean);
     // floats live on the water, not on the (bobbing) yacht
     model.updateMatrixWorld(true);
