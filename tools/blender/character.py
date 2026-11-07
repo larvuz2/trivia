@@ -250,6 +250,35 @@ def find_long_hair(obj, m):
             if j not in seen:
                 seen.add(j)
                 stack.append(j)
+    # grow a few rings into neighbours that aren't skin (hair highlights/shadows miss the colour match
+    # and would otherwise follow the arm and stretch). Skin colour comes from the hands.
+    hands = np.abs(P[:, 0]) > m['reach'] * 0.85
+    skin_c = np.median(cols[hands], axis=0) if hands.sum() > 20 else None
+    member_all = {}
+    for i in np.nonzero(zone)[0]:
+        member_all.setdefault(rep[i], []).append(i)
+    ev_all = np.empty(len(obj.data.edges) * 2, np.int32)
+    obj.data.edges.foreach_get('vertices', ev_all)
+    ev_all = rep[ev_all.reshape(-1, 2)]
+    adj_all = {}
+    for a_, b_ in ev_all:
+        adj_all.setdefault(a_, []).append(b_)
+        adj_all.setdefault(b_, []).append(a_)
+    def not_skin(r):
+        vs = member_all.get(r)
+        if not vs:
+            return False
+        return skin_c is None or np.linalg.norm(cols[vs[0]] - skin_c) > 0.1
+    front = set(seen)
+    for _ in range(4):
+        nxt = set()
+        for r in front:
+            for q in adj_all.get(r, ()):
+                if q not in seen and not_skin(q):
+                    nxt.add(q)
+        seen |= nxt
+        front = nxt
+    members = member_all
     idx = [i for r in seen for i in members.get(r, ()) if P[i, 1] <= neck + 0.04]
     print('long hair: colour', hair.round(3), 'vertices below the neck:', len(idx))
     return set(idx) if len(idx) > 1500 else set()   # a beard, necklace or curls at the nape isn't long hair
