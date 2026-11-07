@@ -4,6 +4,45 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
+/**
+ * How rigged GLB characters are lit. Tuned in the Joe lookdev page so the skin reads like the
+ * reference art even under the flybridge roof (where the sun is blocked).
+ */
+export const CHARACTER_LOOK = {
+  env: 0.55, // ambient fill from the environment map (reaches under the roof)
+  self: 0.1, // show a bit of the painted texture unlit
+  rough: 1.3, // matte the skin (multiplies the model's roughness)
+  albedo: 1.05, // texture brightness
+  sat: 1.12, // texture saturation
+};
+let charEnv = null;
+export function setCharacterEnv(tex) { charEnv = tex; }
+
+function applyLook(model) {
+  const L = CHARACTER_LOOK;
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = o.material;
+    m.envMap = charEnv;
+    m.envMapIntensity = L.env;
+    m.roughness = Math.min(1, (m.roughness ?? 1) * L.rough);
+    if (m.map && L.self > 0) {
+      m.emissiveMap = m.map;
+      m.emissive = new THREE.Color('#ffffff');
+      m.emissiveIntensity = L.self;
+    }
+    const grade = '{ float l = dot(C.rgb, vec3(0.2126, 0.7152, 0.0722)); C.rgb = max(vec3(0.0), mix(vec3(l), C.rgb, SAT)) * ALB; }'
+      .replace(/SAT/g, L.sat.toFixed(3)).replace(/ALB/g, L.albedo.toFixed(3));
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <map_fragment>', `#include <map_fragment>\n${grade.replace(/C\./g, 'diffuseColor.').replace(/C\.rgb/g, 'diffuseColor.rgb')}`)
+        .replace('#include <emissivemap_fragment>', `#ifdef USE_EMISSIVEMAP\n vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );\n ${grade.replace(/C\./g, 'emissiveColor.')}\n totalEmissiveRadiance *= emissiveColor.rgb;\n#endif`);
+    };
+    m.customProgramCacheKey = () => `charlook-${L.sat}-${L.albedo}`;
+    m.needsUpdate = true;
+  });
+}
+
 const SKIN = ['#f1c7a5', '#e0ac85', '#c98e68', '#f5d3b8', '#d9a07a', '#b97c5a', '#eebf9a', '#f0c9a8'];
 const HAIR = ['#3b2a20', '#1f1a17', '#6b4423', '#2c2220', '#8a5a2b', '#1b1b1b', '#a0522d', '#4a3020'];
 
@@ -297,6 +336,7 @@ export class Character {
     model.position.z -= c.z;
     model.position.y -= box.min.y;
     model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    applyLook(model);
     this.model = model;
     this.body.add(model);
     this.placeholder.visible = false;

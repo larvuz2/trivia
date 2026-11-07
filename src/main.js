@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World } from './world.js';
-import { Character, defaultSticker, roundRect } from './characters.js';
+import { Character, defaultSticker, roundRect, setCharacterEnv } from './characters.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Confetti, Splash, makeCategoryProp } from './fx.js';
 import { CameraRig } from './camera.js';
 import { sfx, unlockAudio, startMusic, setAudioEnabled, setMusicState } from './audio.js';
@@ -80,6 +81,7 @@ async function init() {
     console.warn('Yacht model failed to load, using fallback', e);
     world.buildFallbackYacht();
   }
+  setCharacterEnv(world.envMap || new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture);
   setLoad(0.75, 'Painting the Sea of Cortez…');
   try {
     env = await loadSeaOfCortez(world, (p) => setLoad(0.75 + p * 0.15));
