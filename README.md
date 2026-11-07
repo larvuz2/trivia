@@ -195,6 +195,8 @@ Each person is generated with **Meshy v6 (image-to-3D on fal.ai)** from a T-pose
 - the **same height** (2.0 units, feet on the floor, facing forward) and the **same 19-bone skeleton** at the same
   proportional joint heights — so every animation clip works on every character;
 - a **rigid head**: the face is weighted 100% to the head bone, so the expression never deforms;
+- **long hair** is detected by its texture colour (traced down from the head across UV seams) and follows the
+  head and chest, never the arms, so it does not tear when the arms move;
 - clips **idle, idle2, excited, dance, wave, walk** (plus a spare `sit`);
 - mid-weight files: ~40k-triangle mesh, 2K color texture, 1K normal + roughness (webp) — about 3 MB each.
 

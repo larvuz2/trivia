@@ -95,7 +95,7 @@ def measure(obj):
     # neck: the narrowest slice between the shoulders and the head (front-to-back centre only,
     # so a collar or hair hanging behind doesn't count). Proportions differ per character.
     best = None
-    for k in range(int((arm_y + 0.05) / 0.02), int((arm_y + 0.45) / 0.02)):
+    for k in range(int((arm_y + 0.05) / 0.02), int((arm_y + 0.21) / 0.02) + 1):  # long hair hides higher necks
         y = k * 0.02
         xs = sorted(abs(x) for x, yy, z in pts if abs(yy - y) < 0.012)
         if len(xs) < 20:
@@ -175,7 +175,88 @@ def seg_dist(p, a, b):
     return (p - (a + ab * t)).length
 
 
+def vertex_colors(obj):
+    """Base-color texture sampled at each vertex's UV (sRGB 0..1), or None."""
+    import numpy as np
+    img = None
+    for mat in obj.data.materials:
+        if mat and mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type == 'BSDF_PRINCIPLED' and node.inputs['Base Color'].links:
+                    src = node.inputs['Base Color'].links[0].from_node
+                    if src.type == 'TEX_IMAGE' and src.image:
+                        img = src.image
+    uvl = obj.data.uv_layers.active
+    if not img or not uvl:
+        return None
+    w, h = img.size
+    px = np.empty(w * h * 4, np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)[:, :, :3]
+    uv = np.zeros((len(obj.data.vertices), 2), np.float32)
+    loops = np.empty(len(obj.data.loops), np.int32)
+    obj.data.loops.foreach_get('vertex_index', loops)
+    luv = np.empty(len(obj.data.loops) * 2, np.float32)
+    uvl.data.foreach_get('uv', luv)
+    uv[loops] = luv.reshape(-1, 2)
+    xs = np.clip((uv[:, 0] % 1.0) * (w - 1), 0, w - 1).astype(int)
+    ys = np.clip((uv[:, 1] % 1.0) * (h - 1), 0, h - 1).astype(int)
+    return px[ys, xs]
+
+
+def find_long_hair(obj, m):
+    """Vertices of hair hanging below the neck (long hair over the shoulders / back).
+    Hair colour = median colour of the back of the head; hair below the neck must match it."""
+    import numpy as np
+    cols = vertex_colors(obj)
+    if cols is None:
+        return set()
+    P = np.array([(v.co.x, v.co.z, -v.co.y) for v in obj.data.vertices], np.float32)  # game x, y, z
+    neck, ay = m['neck_y'], m['arm_y']
+    head = P[:, 1] > neck + 0.12
+    zc = np.median(P[head, 2])
+    back = head & (P[:, 2] < zc - 0.12) & (np.abs(P[:, 0]) < 0.25)
+    if back.sum() < 50:
+        return set()
+    hair = np.median(cols[back], axis=0)
+    spread = np.median(np.linalg.norm(cols[back] - hair, axis=1))
+    head_w = np.percentile(np.abs(P[head, 0]), 98)
+    near = np.linalg.norm(cols - hair, axis=1) < max(0.1, min(0.16, spread * 2.2))
+    zone = (P[:, 1] > ay - 0.6) & (np.abs(P[:, 0]) < head_w * 1.1)
+    # flood from the hair on the head down through connected hair-coloured vertices, so a beard,
+    # chest hair or dark shorts elsewhere on the body don't count
+    ev = np.empty(len(obj.data.edges) * 2, np.int32)
+    obj.data.edges.foreach_get('vertices', ev)
+    ev = ev.reshape(-1, 2)
+    ok = near & zone
+    ev = ev[ok[ev[:, 0]] & ok[ev[:, 1]]]
+    # the import splits vertices along UV seams: weld coincident vertices so the flood can cross seams
+    key = np.round(P / 1e-4).astype(np.int64)
+    _, rep = np.unique(key, axis=0, return_inverse=True)
+    rep = rep.reshape(-1)
+    ev = rep[ev]
+    adj = {}
+    for a_, b_ in ev:
+        adj.setdefault(a_, []).append(b_)
+        adj.setdefault(b_, []).append(a_)
+    members = {}
+    for i in np.nonzero(ok)[0]:
+        members.setdefault(rep[i], []).append(i)
+    seen = set(rep[np.nonzero(ok & (P[:, 1] > neck + 0.2))[0]].tolist())
+    stack = list(seen)
+    while stack:
+        i = stack.pop()
+        for j in adj.get(i, ()):
+            if j not in seen:
+                seen.add(j)
+                stack.append(j)
+    idx = [i for r in seen for i in members.get(r, ()) if P[i, 1] <= neck + 0.04]
+    print('long hair: colour', hair.round(3), 'vertices below the neck:', len(idx))
+    return set(idx) if len(idx) > 1500 else set()   # a beard, necklace or curls at the nape isn't long hair
+
+
 def skin(obj, rig, J, m):
+    long_hair = find_long_hair(obj, m)
     groups = {n: obj.vertex_groups.new(name=n) for n in J}
     segs = {n: (Vector(h), Vector(t)) for n, (h, t) in J.items()}  # game space
     ay = m['arm_y']
@@ -186,9 +267,18 @@ def skin(obj, rig, J, m):
         p = Vector((v.co.x, v.co.z, -v.co.y))
         side = 'L' if p.x >= 0 else 'R'
         ax = abs(p.x)
-        if p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25):  # wide hair/ears too
+        if v.index in long_hair:
+            # hair hanging over the shoulders: follows the head near the neck, the chest lower down,
+            # never the arms (so it doesn't tear when the arms move)
+            f = max(0.0, min(1.0, (p.y - (ay - 0.45)) / max(0.05, neck_y - (ay - 0.45))))
+            f = f * f
+            groups['head'].add([v.index], 0.15 + 0.6 * f, 'REPLACE')
+            groups['chest'].add([v.index], 0.85 - 0.6 * f, 'REPLACE')
+            continue
+        on_shoulder = ax > sx * 0.95 and p.y < ay + 0.15   # sleeve tops belong to the arm, even on high shoulders
+        if p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25) and not on_shoulder:  # wide hair/ears too
             cands = ['head']                                   # rigid head: the face never deforms
-        elif p.y > neck_y - 0.04 and ax < sx * 1.4:
+        elif p.y > neck_y - 0.04 and ax < sx * 1.4 and not on_shoulder:
             cands = ['head', 'neck']
         elif ax > sx * 0.95 and ay - 0.12 - max(0.0, ax - sx) * 0.6 < p.y < ay + 0.25:
             # the arm/sleeve: a cone that widens away from the armpit, so the shirt's side

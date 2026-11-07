@@ -15,11 +15,13 @@ export const BUILTIN_MODELS = {
   ray: 'models/characters/ray.glb',
   gabriel: 'models/characters/gabriel.glb',
   gus: 'models/characters/gus.glb',
+  baby: 'models/characters/baby.glb',
 };
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
 const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Gus'];
+const GIRL_NAMES = ['Girl 1', 'Girl 2', 'Baby', 'Girl 4'];
 
 const TAGLINES = {
   boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
@@ -41,7 +43,7 @@ export function defaultCharacters() {
     });
     chars.push({
       id: `girl${i + 1}`,
-      name: `Girl ${i + 1}`,
+      name: GIRL_NAMES[i],
       role: 'girl',
       couple: i,
       tagline: TAGLINES.girls[i],
