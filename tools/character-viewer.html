@@ -45,6 +45,7 @@
     const yaw = Number(params.get('yaw') || 0) * Math.PI / 180, dist = total * 0.85 + (params.has('only') ? 4.2 : 6);
     camera.position.set(Math.sin(yaw) * dist, 1.6, Math.cos(yaw) * dist);
     camera.lookAt(0, 1.0, 0);
+    if (params.has('face')) { camera.position.set(Math.sin(yaw) * 1.9, 1.5, Math.cos(yaw) * 1.9); camera.lookAt(0, 1.45, 0); }
     const mixers = [];
     const labels = document.getElementById('labels');
     clips.forEach((clip, i) => {

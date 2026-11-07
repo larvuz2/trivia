@@ -1,17 +1,28 @@
 // Generate a character with Meshy v6 (image-to-3D on fal.ai) from a T-pose picture.
-//   FAL_KEY=... node tools/characters/generate.mjs tools/characters/<name>_ref.jpg <name>
+//   FAL_KEY=... node tools/characters/generate.mjs tools/characters/<name>_ref.jpg <name> [options]
 // Writes tools/characters/<name>_src.glb, then run: tools/characters/build.sh <name>
+// Options: --texture meshy-7|meshy-n1 (meshy-7 matched faces best in a side-by-side test)   --polycount 70000   --out <file.glb>   --dry
+// The picture is first cropped tight around the character (crop_ref.py) so Meshy sees the face at full res.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
-const [img, name, flag] = process.argv.slice(2);
-if (!img || !name) { console.error('usage: node tools/characters/generate.mjs <image> <name> [--dry]'); process.exit(1); }
+const args = process.argv.slice(2);
+const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
+const [src, name] = args;
+const flag = args.includes('--dry') ? '--dry' : null;
+if (!src || !name) { console.error('usage: node tools/characters/generate.mjs <image> <name> [--texture meshy-n1] [--polycount 70000] [--out f.glb] [--dry]'); process.exit(1); }
+const textureModel = opt('--texture', 'meshy-7');
+const polycount = Number(opt('--polycount', 70000));
+const img = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'char-')), `${name}_crop.png`);
+execFileSync('python3', [path.join(path.dirname(new URL(import.meta.url).pathname), 'crop_ref.py'), src, img], { stdio: 'inherit' });
 const KEY = process.env.FAL_KEY;
 if (!KEY) { console.error('FAL_KEY is not set'); process.exit(1); }
 const auth = { Authorization: `Key ${KEY}` };
 
 // 1. upload the picture to fal storage (Meshy needs a URL)
-const type = img.endsWith('.png') ? 'image/png' : 'image/jpeg';
+const type = 'image/png';
 const init = await fetch('https://rest.alpha.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3', {
   method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
   body: JSON.stringify({ content_type: type, file_name: path.basename(img) }),
@@ -21,11 +32,14 @@ if (!put.ok) throw new Error(`upload failed: ${put.status}`);
 console.log('uploaded', init.file_url);
 if (flag === '--dry') process.exit(0);
 
-// 2. Meshy v6: T-pose, ~40k triangles, PBR maps, the picture also guides the texture
+// 2. Meshy v6: T-pose, ~70k triangles, no forced symmetry (faces aren't symmetric), texture painted from
+//    the picture. meshy-n1 textures from the reference image only (closest likeness, no PBR maps).
 const input = {
   image_url: init.file_url, texture_image_url: init.file_url, pose_mode: 't-pose',
-  target_polycount: 40000, enable_pbr: true, should_remesh: true, topology: 'triangle', symmetry_mode: 'auto',
+  target_polycount: polycount, should_remesh: true, topology: 'triangle', symmetry_mode: 'off',
+  texture_model: textureModel, enable_pbr: textureModel !== 'meshy-n1',
 };
+console.log('meshy input', JSON.stringify({ ...input, image_url: '…', texture_image_url: '…' }));
 const job = await fetch('https://queue.fal.run/fal-ai/meshy/v6/image-to-3d', {
   method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify(input),
 }).then((r) => r.json());
@@ -39,6 +53,6 @@ for (;;) {
 }
 const res = await fetch(job.response_url, { headers: auth }).then((r) => r.json());
 const glb = await fetch(res.model_glb.url).then((r) => r.arrayBuffer());
-const out = `tools/characters/${name}_src.glb`;
+const out = opt('--out', `tools/characters/${name}_src.glb`);
 fs.writeFileSync(out, Buffer.from(glb));
 console.log('\nsaved', out, `(${(glb.byteLength / 1e6).toFixed(1)} MB) — next: tools/characters/build.sh ${name}`);
