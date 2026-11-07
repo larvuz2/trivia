@@ -51,7 +51,7 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
 1. **Main menu** — just the yacht and the Sea of Cortez (nobody on deck yet). Click the glowing **START** button on
    the LED dance floor (or press Enter).
 2. **Opening cinematic (~15 s)** — letterboxed, with fades through black: a low angle as the yacht cruises in with its
-   wake, a seagull tracking alongside, then the DJ drops the beat and the deck lights up. *Skip intro* / Esc skips it.
+   wake, a seagull tracking alongside, then the DJ drops the beat and the deck lights up. Esc skips the cinematic; the tiny *Skip intro* button (bottom-left, shown for the whole intro) jumps straight to the teams.
 3. **Introducing the gang** — fixed camera on deck at night, party beams sweeping. One at a time the salon doors slide
    open and a character walks out to their mark: confetti cannons, crowd cheer, a lower-third name plate, and a loop
    pose. **Host: click (or Space) for the next one** — they walk past the camera and a big title card introduces the
@@ -181,7 +181,9 @@ Click **⚙ Game Setup** on the main menu. Everything saves in the browser as yo
   `idle`, `idle2`, `walk`, `wave`, `dance`, `excited`/`cheer` play automatically.
 - **Categories** — name, icon, color and which 3D transition each column uses.
 - **Questions** — 25 editors: title, private answer, explanation, format (text / image + question / image only),
-  image upload, which boy it's about, and a "funny" flag.
+  a question image (before the reveal) and an optional answer image that replaces it when the answer is revealed,
+  which boy it's about, and a "funny" flag. **▶ Preview** plays that one question exactly as in the game
+  (Space = reveal / back, Esc = close).
 - **Final Splash**, **Settings** (timer, stealing, penalties, Double Trouble, Ask the Boys, sound, music, team names/colors).
 - **Save / Load** — download everything (including photos and models) as one `.json` file and load it on the party laptop.
 

@@ -78,6 +78,7 @@ const Q = (title, answer, extra = {}) => ({
   answer,
   explanation: '',
   image: null,
+  answerImage: null, // optional: replaces the image when the answer is revealed
   format: 'text', // 'text' | 'image' | 'imageOnly'
   subject: null, // character id the question is about (he reacts!)
   funny: false,

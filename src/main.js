@@ -463,6 +463,7 @@ function startGame() {
   // opening cinematic, then the gang is introduced one by one; the TV on deck starts the game
   setTimeout(async () => {
     await director.playCinematic();
+    if (director.skipAllRequested) return director.finishSkipped();  // "Skip intro" pressed during the cinematic
     await director.startIntros();
   }, 450);
 }
@@ -506,6 +507,7 @@ function openSetup() {
       if (what === 'model' || what === 'all') buildCharacters();
     },
     onClose: () => showMenu(),
+    previewQuestion: (ci, r) => previewQuestion(ci, r),
     previewCharacter: (id) => {
       const ch = characters.find((c) => c.data.id === id);
       if (ch) {
@@ -876,11 +878,19 @@ function clearGuests() {
   guests = [];
 }
 
+/** Question image(s): the "before" image, and an optional "after" image that replaces it on reveal. */
+function qImageHTML(imgURL, afterURL) {
+  if (!imgURL && !afterURL) return '';
+  const cls = [!imgURL ? 'after-only' : '', afterURL ? 'has-after' : ''].join(' ');
+  return `<div class="q-image ${cls}">${imgURL ? `<img class="qi-before" src="${imgURL}" alt="">` : ''}${afterURL ? `<img class="qi-after" src="${afterURL}" alt="">` : ''}</div>`;
+}
+
 async function showQuestion() {
   const cur = game.current;
   const cat = config.categories[cur.c];
   const q = config.questions[cur.c][cur.r];
   const imgURL = q.image ? await mediaURL(q.image) : null;
+  const afterURL = q.answerImage ? await mediaURL(q.answerImage) : null;
   const format = imgURL ? q.format || 'image' : 'text';
   const subject = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
   turnShot(player, 'board', 1.0);
@@ -894,7 +904,7 @@ async function showQuestion() {
           <span class="q-chip q-points">${cur.points} POINTS${cur.double ? ' · ×2' : ''}</span>
           <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
         </div>
-        ${imgURL ? `<div class="q-image"><img src="${imgURL}" alt=""></div>` : ''}
+        ${qImageHTML(imgURL, afterURL)}
         ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title)}</h1>` : ''}
         ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
         <div class="q-answering" style="--team:${teamColor(cur.answering)}"><span>${esc(player.data.name)}</span> answers for ${esc(teamName(cur.answering))}!</div>
@@ -928,7 +938,61 @@ function revealAnswer(force = null) {
   if (!a) return;
   const show = force ?? a.classList.contains('hidden');
   a.classList.toggle('hidden', !show);
+  a.closest('.q-card')?.classList.toggle('revealed', show);   // swaps in the "after" image, if any
   if (show) sfx('sparkle');
+}
+
+/** Setup → Questions → ▶ Preview: shows one question exactly as in the game, with reveal / hide. */
+async function previewQuestion(ci, r) {
+  const q = config.questions[ci][r];
+  const cat = config.categories[ci];
+  const imgURL = q.image ? await mediaURL(q.image) : null;
+  const afterURL = q.answerImage ? await mediaURL(q.answerImage) : null;
+  const format = imgURL ? q.format || 'image' : 'text';
+  const subject = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
+  document.querySelector('.q-preview')?.remove();
+  const ov = el(`<div class="q-preview">
+    <div class="trivia-panel question-mode">
+      <div class="q-card in-panel fmt-${format}" style="--cat:${cat.color}">
+        <div class="q-head">
+          <span class="q-chip">${esc(cat.icon)} ${esc(cat.name)}</span>
+          <span class="q-chip q-points">${POINTS[r]} POINTS</span>
+          <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
+        </div>
+        ${qImageHTML(imgURL, afterURL)}
+        ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title || '(no question yet)')}</h1>` : ''}
+        ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
+        <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer || '(no answer yet)')}</div>${q.explanation ? `<div class="q-explain">${esc(q.explanation)}</div>` : ''}</div>
+      </div>
+    </div>
+    <div class="qp-bar">
+      <span class="qp-label">PREVIEW · ${esc(cat.name)} ${POINTS[r]}</span>
+      <button class="hb" data-qp="reveal">👁 Reveal answer<kbd>Space</kbd></button>
+      <button class="hb" data-qp="close">✕ Close<kbd>Esc</kbd></button>
+    </div>
+  </div>`);
+  document.body.appendChild(ov);
+  const card = ov.querySelector('.q-card');
+  const btn = ov.querySelector('[data-qp=reveal]');
+  const toggle = () => {
+    const a = card.querySelector('.q-answer');
+    const show = a.classList.contains('hidden');
+    a.classList.toggle('hidden', !show);
+    card.classList.toggle('revealed', show);
+    btn.innerHTML = show ? '↺ Back to question<kbd>Space</kbd>' : '👁 Reveal answer<kbd>Space</kbd>';
+    if (show) sfx('sparkle');
+  };
+  const close = () => { ov.remove(); window.removeEventListener('keydown', onKey, true); };
+  const onKey = (e) => {
+    if (e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  };
+  window.addEventListener('keydown', onKey, true);
+  ov.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-qp]')?.dataset.qp;
+    if (a === 'reveal') toggle();
+    else if (a === 'close' || e.target === ov) close();
+  });
 }
 
 let resolving = false;

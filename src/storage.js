@@ -165,7 +165,7 @@ export function deviceOnlyMedia(cfg) {
   let n = 0;
   const check = (ref) => { if (ref?.startsWith('idb:')) n++; };
   cfg.characters.forEach((c) => { check(c.sticker); check(c.model); });
-  cfg.questions.forEach((col) => col.forEach((q) => check(q.image)));
+  cfg.questions.forEach((col) => col.forEach((q) => { check(q.image); check(q.answerImage); }));
   check(cfg.final?.image);
   return n;
 }
@@ -276,7 +276,7 @@ async function mapRefs(cfg, fn) {
     c.sticker = await fn(c.sticker);
     c.model = await fn(c.model);
   }
-  for (const col of out.questions) for (const q of col) q.image = await fn(q.image);
+  for (const col of out.questions) for (const q of col) { q.image = await fn(q.image); q.answerImage = await fn(q.answerImage ?? null); }
   out.final.image = await fn(out.final.image);
   return out;
 }

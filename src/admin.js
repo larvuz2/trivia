@@ -15,7 +15,7 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-export function openAdmin({ config, onChange, onClose, previewCharacter }) {
+export function openAdmin({ config, onChange, onClose, previewCharacter, previewQuestion }) {
   const cfg = structuredClone(config);
   let tab = 'characters';
   let qCat = 0;
@@ -123,6 +123,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
       const qs = cfg.questions[qCat];
       const items = await Promise.all(qs.map(async (q, r) => {
         const img = q.image ? await mediaURL(q.image) : null;
+        const after = q.answerImage ? await mediaURL(q.answerImage) : null;
         return `<div class="a-card q-edit" data-r="${r}">
           <div class="q-edit-pts" style="--cat:${cfg.categories[qCat].color}">${POINTS[r]}</div>
           <div class="grow">
@@ -141,8 +142,14 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
               <label class="check"><input type="checkbox" data-qf="funny" ${q.funny ? 'checked' : ''}> Funny (people laugh)</label>
             </div>
             <div class="row files">
-              <label class="file-btn">🖼 Upload image<input type="file" accept="image/*" data-qup="${r}"></label>
-              ${img ? `<img class="q-thumb" src="${img}"><button class="btn-mini" data-qclear="${r}">✕ image</button>` : '<span class="tag dim">no image</span>'}
+              <span class="q-img-label">Before reveal</span>
+              <label class="file-btn">🖼 Question image<input type="file" accept="image/*" data-qup="${r}"></label>
+              ${img ? `<img class="q-thumb" src="${img}"><button class="btn-mini" data-qclear="${r}">✕</button>` : '<span class="tag dim">none</span>'}
+              <span class="q-img-arrow">→</span>
+              <span class="q-img-label">After reveal (optional)</span>
+              <label class="file-btn">🖼 Answer image<input type="file" accept="image/*" data-qaup="${r}"></label>
+              ${after ? `<img class="q-thumb" src="${after}"><button class="btn-mini" data-qaclear="${r}">✕</button>` : '<span class="tag dim">none</span>'}
+              <button class="btn-mini q-preview-btn" data-qpreview="${r}">▶ Preview</button>
             </div>
           </div>
         </div>`;
@@ -215,6 +222,16 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
     if (qc) { qCat = +qc.dataset.qcat; return render(); }
     const pv = t.closest('[data-preview]');
     if (pv) return previewCharacter?.(pv.dataset.preview);
+    const qpv = t.closest('[data-qpreview]');
+    if (qpv) return previewQuestion?.(qCat, +qpv.dataset.qpreview);
+    const qac = t.closest('[data-qaclear]');
+    if (qac) {
+      const q = cfg.questions[qCat][+qac.dataset.qaclear];
+      await deleteMedia(q.answerImage);
+      q.answerImage = null;
+      changed('content', true);
+      return render();
+    }
     const cl = t.closest('[data-clear]');
     if (cl) {
       const i = +cl.closest('[data-i]').dataset.i;
@@ -328,6 +345,11 @@ export function openAdmin({ config, onChange, onClose, previewCharacter }) {
       await deleteMedia(cfg.characters[i][t.dataset.up]);
       cfg.characters[i][t.dataset.up] = ref;
       changed(t.dataset.up === 'model' ? 'model' : 'characters', true);
+    } else if (t.dataset.qaup !== undefined) {
+      const q = cfg.questions[qCat][+t.dataset.qaup];
+      await deleteMedia(q.answerImage);
+      q.answerImage = ref;
+      changed('content', true);
     } else if (t.dataset.qup !== undefined) {
       const q = cfg.questions[qCat][+t.dataset.qup];
       await deleteMedia(q.image);

@@ -51,7 +51,7 @@ export class IntroDirector {
     this.bars = el('<div class="letterbox"><div class="lb-top"></div><div class="lb-bottom"></div></div>');
     this.caption = el('<div class="cine-caption"></div>');
     this.skipBtn = el('<button class="skip-btn">Skip intro ⏭</button>');
-    this.skipBtn.addEventListener('click', () => this.skip());
+    this.skipBtn.addEventListener('click', () => this.skipAll());
     document.body.append(this.fader, this.bars, this.caption, this.skipBtn);
   }
 
@@ -178,6 +178,8 @@ export class IntroDirector {
     this.active = true;
     this.mode = 'cinematic';
     this.skipped = false;
+    this.skipAllRequested = false;
+    this.aborted = false;
     this.fader.style.transitionDuration = '0ms';
     this.fader.style.opacity = '1';
     void this.fader.offsetWidth; // commit the black frame so the fade-in actually animates
@@ -302,6 +304,31 @@ export class IntroDirector {
     if (this.mode === 'cinematic') this.skipped = true;
   }
 
+  /** "Skip intro" button: skip the cinematic AND the character introductions, straight to the teams. */
+  skipAll() {
+    this.skipAllRequested = true;
+    if (this.mode === 'cinematic') { this.skipped = true; return; }  // main.js sees skipAllRequested afterwards
+    if (this.mode === 'intro') this.abortIntros();
+  }
+
+  /** Called by main.js when the cinematic was skipped with "Skip intro". */
+  finishSkipped() {
+    this.skipAllRequested = false;
+    this.active = true;
+    this.mode = 'intro';
+    return this.abortIntros();
+  }
+
+  abortIntros() {
+    if (this.mode !== 'intro' || this.aborted) return;
+    this.aborted = true;
+    this.skipAllRequested = false;
+    this.hidePlate();
+    document.querySelectorAll('.title-card').forEach((c) => c.remove());
+    this.state = 'final';
+    return this.finish();
+  }
+
   async endCinematic(alreadyBlack = false) {
     if (!alreadyBlack) await this.fade(1, 300);
     this.setCaption('');
@@ -350,6 +377,8 @@ export class IntroDirector {
     this.active = true;
     this.mode = 'intro';
     this.state = 'busy';
+    this.aborted = false;
+    this.skipBtn.classList.add('show');
     const w = this.world;
     const chars = this.characters();
     // couple by couple: the girl, then her guy
@@ -386,7 +415,9 @@ export class IntroDirector {
     document.body.appendChild(this.hint);
     this.updateHint();
     await this.fade(0, 900);
+    if (this.aborted) return;
     await this.titleCard(this.queue[0]);
+    if (this.aborted) return;
     this.arrive(0);
   }
 
@@ -413,12 +444,14 @@ export class IntroDirector {
     w.setDoors(true);
     sfx('door');
     await wait(450);
+    if (this.aborted) return;
     ch.target = null;
     ch.place(DOOR.x, DOOR.z, Math.PI, 'idle');
     ch.pop(true, true);
     const face = Math.atan2(CAM.pos[0] - MARK.x, CAM.pos[2] - MARK.z);
     ch.moveTo(MARK.x, MARK.z, { face, speed: 2.3, then: 'intro' });
     await this.until(() => !ch.target, 6000);
+    if (this.aborted) return;
     w.setDoors(false);
     w.setSpotlight(new THREE.Vector3(MARK.x, 0, MARK.z));
     // confetti cannons from both sides of the frame
@@ -446,6 +479,7 @@ export class IntroDirector {
     this.world.setSpotlight(null);
     ch.moveTo(EXIT.x, EXIT.z, { face: 0, speed: 2.6, then: 'idle' });
     await wait(1700);
+    if (this.aborted) return;
     ch.pop(false);
     await this.titleCard(this.queue[this.index + 1]);
     this.arrive(this.index + 1);
@@ -473,6 +507,7 @@ export class IntroDirector {
     // pull back to reveal the whole gang
     this.rig.shot(this.sw(0.4, 1.7, -4.8), this.sw(-0.6, 1.35, 3.0), 2.6, 'inOut');
     await wait(2600);
+    if (this.aborted) return;
     this.queue.forEach((c) => c.react('cheer', 1.8));
     for (let k = 0; k < 3; k++) {
       setTimeout(() => {
@@ -483,7 +518,9 @@ export class IntroDirector {
     }
     sfx('cheer');
     setTimeout(() => sfx('cheer'), 900);
+    if (this.aborted) return;
     await this.titleCard(null, { kicker: 'TONIGHT’S CREW', name: 'THE GANG’S ALL HERE!', tagline: 'Four couples. Two teams. One yacht.', color: '#ff7a45' });
+    if (this.aborted) return;
     this.setTV('start');
     this.state = 'final';
     this.updateHint();
@@ -510,6 +547,7 @@ export class IntroDirector {
   async finish() {
     if (this.state !== 'final') return;
     this.state = 'done';
+    this.skipBtn.classList.remove('show');
     sfx('fanfare');
     this.hint?.remove();
     this.hint = null;
@@ -549,6 +587,7 @@ export class IntroDirector {
     sfx('impact');
     requestAnimationFrame(() => card.classList.add('show'));
     await wait(2550);
+    if (this.aborted) { card.remove(); return; }
     card.classList.remove('show');
     card.classList.add('hide');
     setMusicState('party', 0.5);
@@ -602,6 +641,7 @@ export class IntroDirector {
       if (k === 'escape' || k === 'enter') this.skip();
       return true;
     }
+    if (k === 'escape') { this.skipAll(); return true; }
     if (k === ' ' || k === 'enter' || k === 'arrowright') { this.next(); return true; }
     return true;
   }
