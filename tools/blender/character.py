@@ -7,7 +7,7 @@ Every character goes through the same pipeline so they all share:
   * the same skeleton (bone names, rest orientations and proportional joint heights),
 so every animation clip works on every character.
 
-Clips: idle, idle2, excited, dance, wave, walk, sit. The head is skinned rigidly to the head bone,
+Clips: idle, idle2, excited, dance, wave, walk, sit, cheers, sunbathe, swim, fish, dj, selfie, conga, laugh, dance2. The head is skinned rigidly to the head bone,
 so the face/expression never deforms.
 
 Coordinates: we think in GAME space (three.js Y-up, x = character's left, z = forward).
@@ -534,6 +534,172 @@ def anim_sit(t, T):
     return p
 
 
+def pulse(x, a, b):
+    """0 -> 1 -> 0 bump between a and b (x in 0..1)."""
+    if x <= a or x >= b:
+        return 0.0
+    return S(math.pi * (x - a) / (b - a))
+
+
+def anim_cheers(t, T):
+    """Drink in the right hand: raise it for a toast, clink, then a sip."""
+    ph = (t / T) % 1.0
+    w = 2 * math.pi * ph
+    toast = pulse(ph, 0.05, 0.5)
+    sip = pulse(ph, 0.55, 0.95)
+    p = arms_down({}, 1.15, 0.85, 0.2)
+    p['upperarm.R'] = [(Z, 0.85 - 0.9 * toast - 0.35 * sip), (X, -0.55 - 0.5 * toast - 0.2 * sip)]
+    p['forearm.R'] = [(X, -0.9 + 0.5 * toast - 1.0 * sip)]
+    p['hand.R'] = [(X, 0.3 * sip)]
+    p['chest'] = [(X, -0.04 * toast), (Y, 0.05 * S(w))]
+    p['head'] = [(X, -0.12 * toast + 0.1 * sip), (Y, 0.08 * S(w))]
+    p['_hips_offset'] = (0, 0.015 * S(w * 2), 0)
+    return p
+
+
+def anim_sunbathe(t, T):
+    """Lying on the back (the game lays the body down): hands behind the head, one knee up, breathing."""
+    w = 2 * math.pi * t / T
+    p = {}
+    p['upperarm.L'] = [(Z, 1.55), (X, 0.35)]
+    p['upperarm.R'] = [(Z, -1.55), (X, 0.35)]
+    p['forearm.L'] = [(Z, 2.1)]
+    p['forearm.R'] = [(Z, -2.1)]
+    p['thigh.R'] = [(X, -0.75)]
+    p['shin.R'] = [(X, 1.35)]
+    p['thigh.L'] = [(Z, 0.06)]
+    p['foot.L'] = [(X, 0.1 * S(w * 0.5))]
+    p['chest'] = [(X, -0.035 * S(w))]
+    p['head'] = [(X, -0.1), (Y, 0.12 * S(w * 0.5))]
+    return p
+
+
+def anim_swim(t, T):
+    """Treading water: arms sculling at chest height, legs kicking."""
+    w = 2 * math.pi * t / T
+    p = {}
+    p['upperarm.L'] = [(Z, -0.55), (Y, -0.5 - 0.35 * S(w))]
+    p['upperarm.R'] = [(Z, 0.55), (Y, 0.5 + 0.35 * S(w))]
+    p['forearm.L'] = [(Y, -0.4 - 0.25 * S(w + 1))]
+    p['forearm.R'] = [(Y, 0.4 + 0.25 * S(w + 1))]
+    p['thigh.L'] = [(X, -0.35 * S(w * 2))]
+    p['thigh.R'] = [(X, 0.35 * S(w * 2))]
+    p['shin.L'] = [(X, 0.4 + 0.3 * S(w * 2))]
+    p['shin.R'] = [(X, 0.4 - 0.3 * S(w * 2))]
+    p['head'] = [(X, -0.12), (Y, 0.15 * S(w * 0.5))]
+    p['_hips_offset'] = (0, 0.03 * S(w), 0)
+    return p
+
+
+def anim_fish(t, T):
+    """Holding a rod out in front with both hands; a sharp tug near the end of the loop."""
+    ph = (t / T) % 1.0
+    w = 2 * math.pi * ph
+    tug = pulse(ph, 0.62, 0.8)
+    p = {}
+    p['upperarm.L'] = [(Z, -1.0), (Y, -0.75 - 0.3 * tug)]
+    p['upperarm.R'] = [(Z, 1.0), (Y, 0.75 + 0.3 * tug)]
+    p['forearm.L'] = [(Y, -0.6), (Z, 0.5 + 0.6 * tug)]
+    p['forearm.R'] = [(Y, 0.6), (Z, -0.5 - 0.6 * tug)]
+    p['chest'] = [(X, 0.06 - 0.22 * tug)]
+    p['spine'] = [(X, -0.08 * tug)]
+    p['head'] = [(X, 0.12 - 0.1 * tug), (Y, 0.05 * S(w))]
+    p['_hips_offset'] = (0, -0.03 * tug, 0)
+    return p
+
+
+def anim_dj(t, T):
+    """Left hand on the headphone, right hand scratching the deck, nodding to the beat."""
+    ph = (t / T) % 1.0
+    w = 2 * math.pi * ph
+    beat = abs(S(w))
+    p = {}
+    p['upperarm.L'] = [(Z, 0.35), (Y, -0.25)]
+    p['forearm.L'] = [(Z, 2.25)]
+    p['upperarm.R'] = [(Z, 0.95), (X, -0.6)]
+    p['forearm.R'] = [(X, -0.85), (Y, 0.35 * S(w * 2))]
+    p['hand.R'] = [(Z, 0.2 * S(w * 2))]
+    p['head'] = [(X, 0.16 * beat), (Z, -0.12)]
+    p['chest'] = [(X, 0.05 * beat)]
+    p['_hips_offset'] = (0, -0.04 * beat, 0)
+    p['thigh.L'] = [(X, -0.08 * beat)]
+    p['shin.L'] = [(X, 0.16 * beat)]
+    p['thigh.R'] = [(X, -0.08 * beat)]
+    p['shin.R'] = [(X, 0.16 * beat)]
+    return p
+
+
+def anim_selfie(t, T):
+    """Phone up and out in the right hand, left hand throwing a peace sign, posing."""
+    w = 2 * math.pi * t / T
+    p = {}
+    p['upperarm.R'] = [(Z, -0.45), (Y, 0.9)]
+    p['forearm.R'] = [(Z, -0.25)]
+    p['hand.R'] = [(X, 0.5)]
+    p['upperarm.L'] = [(Z, 0.15), (Y, -0.35)]
+    p['forearm.L'] = [(Z, 1.9)]
+    p['head'] = [(Z, 0.18 + 0.05 * S(w)), (Y, 0.25), (X, -0.08)]
+    p['chest'] = [(Z, 0.08 * S(w)), (Y, 0.12)]
+    p['_hips_offset'] = (0.02 * S(w), 0.012 * abs(S(w)), 0)
+    return p
+
+
+def anim_conga(t, T):
+    """Conga: walking with both hands forward on the shoulders in front, hips swinging, a kick every bar."""
+    w = 2 * math.pi * t / T
+    s = S(w)
+    p = {}
+    p['upperarm.L'] = [(Z, -0.25), (Y, -1.25)]
+    p['upperarm.R'] = [(Z, 0.25), (Y, 1.25)]
+    p['forearm.L'] = [(Y, -0.35)]
+    p['forearm.R'] = [(Y, 0.35)]
+    p['thigh.L'] = [(X, -0.45 * s), (Z, 0.25 * max(0, S(w * 0.5)) ** 4)]
+    p['thigh.R'] = [(X, 0.45 * s)]
+    p['shin.L'] = [(X, 0.6 * max(0, -C(w)))]
+    p['shin.R'] = [(X, 0.6 * max(0, C(w)))]
+    p['hips'] = [(Z, 0.12 * s), (Y, 0.1 * s)]
+    p['chest'] = [(Z, -0.1 * s), (X, 0.12)]
+    p['head'] = [(Z, 0.08 * s)]
+    p['_hips_offset'] = (0.05 * s, 0.03 * abs(C(w)), 0)
+    return p
+
+
+def anim_laugh(t, T):
+    """Belly laugh: hands on the belly, leaning back, shaking."""
+    w = 2 * math.pi * t / T
+    shake = S(w * 4)
+    p = arms_down({}, 1.1, 1.1, 0.0)
+    p['upperarm.L'].append((X, -0.35))
+    p['upperarm.R'].append((X, -0.35))
+    p['forearm.L'] = [(X, -1.3), (Y, -0.55)]
+    p['forearm.R'] = [(X, -1.3), (Y, 0.55)]
+    p['chest'] = [(X, -0.22 + 0.05 * shake)]
+    p['spine'] = [(X, -0.08)]
+    p['head'] = [(X, -0.25 + 0.06 * shake), (Z, 0.08 * S(w))]
+    p['_hips_offset'] = (0, 0.02 * abs(shake), 0)
+    return p
+
+
+def anim_dance2(t, T):
+    """Raise the roof: arms pumping overhead, hips swaying, knees bouncing."""
+    w = 2 * math.pi * t / T
+    b = abs(S(w))
+    p = {}
+    p['upperarm.L'] = [(Z, 1.75 + 0.25 * S(w * 2))]
+    p['upperarm.R'] = [(Z, -1.75 - 0.25 * S(w * 2))]
+    p['forearm.L'] = [(Z, 0.5 + 0.3 * S(w * 2))]
+    p['forearm.R'] = [(Z, -0.5 - 0.3 * S(w * 2))]
+    p['hips'] = [(Z, 0.12 * S(w)), (Y, 0.15 * S(w))]
+    p['chest'] = [(Z, -0.1 * S(w))]
+    p['head'] = [(Z, 0.1 * S(w)), (X, 0.08 * b)]
+    p['_hips_offset'] = (0.06 * S(w), -0.05 * b, 0)
+    p['thigh.L'] = [(X, -0.2 * b)]
+    p['shin.L'] = [(X, 0.4 * b)]
+    p['thigh.R'] = [(X, -0.2 * b)]
+    p['shin.R'] = [(X, 0.4 * b)]
+    return p
+
+
 ANIMS = [
     ('idle', anim_idle, 2.4),
     ('idle2', anim_idle2, 4.0),
@@ -542,6 +708,15 @@ ANIMS = [
     ('wave', anim_wave, 1.6),
     ('walk', anim_walk, 0.8),
     ('sit', anim_sit, 4.0),
+    ('cheers', anim_cheers, 3.0),
+    ('sunbathe', anim_sunbathe, 5.0),
+    ('swim', anim_swim, 1.6),
+    ('fish', anim_fish, 3.0),
+    ('dj', anim_dj, 0.9),
+    ('selfie', anim_selfie, 2.4),
+    ('conga', anim_conga, 0.8),
+    ('laugh', anim_laugh, 1.6),
+    ('dance2', anim_dance2, 1.2),
 ]
 
 

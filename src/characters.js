@@ -312,6 +312,7 @@ export class Character {
   showName(v) { this.label.visible = v; }
 
   showEmote(name, dur = 2) {
+    if (this.noEmotes) return;
     this.emote.material.map = getEmote(name);
     this.emote.material.needsUpdate = true;
     this.emote.visible = true;
@@ -485,7 +486,7 @@ export class Character {
         // standing loop: switch between the two idles and now and then throw in a wave / dance / cheer
         // (each character on its own random timer so nobody looks like a clone)
         this.idleSwap = (this.idleSwap ?? 3 + Math.random() * 6) - dt;
-        if (this.idleSwap < 0 && this.baseState === 'idle' && !this.target) {
+        if (this.idleSwap < 0 && this.baseState === 'idle' && !this.target && !this.directed) {
           this.idleSwap = 5 + Math.random() * 6;
           if (Math.random() < 0.4) {
             const extra = ['wave', 'dance', 'cheer', 'dance'][Math.floor(Math.random() * 4)];
@@ -562,7 +563,7 @@ export class Character {
         if (t >= 1.3) {
           this.saidDizzy = false;
           if (this.resumeTarget && this.target) { this.resumeTarget = false; this.state = 'walk'; this.stateTime = 0; this.moveDelay = 0; this.playClip('walk'); }
-          else this.setState('idle');
+          else this.setState(this.baseState && this.baseState !== 'sit' ? this.baseState : 'idle');
         }
         break;
       }
@@ -711,6 +712,8 @@ export class Character {
     if (this.baseState === 'sit' && this.state !== 'sit' && this.state !== 'walk' && this.state !== 'stumble') {
       b.position.y += this.seatY - (this.model ? 0.5 : 0.44);
     }
+    // movie mode: a scene can take over the body (lie down, barrel roll, tumble over the rail…)
+    if (this.bodyOverride) this.bodyOverride(b, dt);
     // pop in/out
     if (this.popScale !== this.popTarget) {
       this.popScale += (this.popTarget - this.popScale) * Math.min(1, dt * 10);

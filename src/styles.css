@@ -626,3 +626,22 @@ textarea { resize: vertical; }
 .fw-title { font-family: var(--display); font-size: clamp(36px, 6vw, 88px); line-height: 1; -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; text-shadow: 0 6px 0 rgba(0,0,0,0.25); animation: slam 0.7s 0.4s cubic-bezier(.2,1.6,.4,1) both; }
 .fw-hint { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); color: #fff; font-weight: 700; font-size: 14px; background: rgba(26,36,73,0.6); padding: 8px 18px; border-radius: 99px; animation: rise-in 0.6s 1.5s both; }
 #ui .screen.screen-farewell { cursor: pointer; pointer-events: auto; }
+
+/* ---------- 🎬 movie mode ---------- */
+.movie-ui { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+.mv-bar { position: absolute; left: 0; right: 0; height: 7vh; background: #000; }
+.mv-bar.top { top: 0; }
+.mv-bar.bottom { bottom: 0; }
+.mv-fade { position: absolute; inset: 0; background: #000; opacity: 1; transition-property: opacity; transition-timing-function: ease-in-out; }
+.mv-title { position: absolute; left: 3vw; bottom: calc(7vh + 18px); color: #fff; display: flex; flex-direction: column; gap: 2px; opacity: 0; text-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+.mv-title.show { animation: mv-title 3.6s ease-in-out both; }
+.mv-num { font-family: var(--body); font-weight: 700; font-size: 11px; letter-spacing: 0.35em; color: var(--gold); }
+.mv-name { font-family: var(--display); font-size: clamp(22px, 3vw, 40px); letter-spacing: 0.06em; }
+@keyframes mv-title { 0% { opacity: 0; transform: translateY(8px); } 15%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.mv-buttons { position: absolute; top: calc(7vh + 10px); right: 14px; display: flex; gap: 6px; pointer-events: auto; }
+.mv-buttons button { font-family: var(--body); font-weight: 700; font-size: 12px; color: #fff; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.3); border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+.mv-buttons button:hover { background: rgba(0,0,0,0.6); }
+.mv-phone { position: absolute; inset: 9vh 26vw; border: 3px solid rgba(255,255,255,0.85); border-radius: 26px; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.25); }
+.mv-phone.hidden { display: none; }
+.mv-rec { position: absolute; top: 12px; left: 16px; color: #ff4d5e; font-weight: 800; font-size: 13px; letter-spacing: 0.1em; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.2; } }

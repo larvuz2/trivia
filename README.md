@@ -77,6 +77,28 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
 The sky slowly turns from afternoon to golden hour to a party night as the board empties, and the yacht's LEDs,
 neon sign, string lights, hot tub and dance floor glow brighter.
 
+## 🎬 Movie mode
+
+The 🎬 button on the main menu plays little ~10-second scenes with the gang, with cinematic camera moves, fades
+and letterboxing, on a loop until you press **✕ Exit** (or Esc). **Next ⏭** (or →) skips ahead.
+
+1. **Curtain call** — everyone on the swim platform under the COMPITAS name board
+2. **The bar** — the four boys toasting (cups, a margarita, a beer)
+3. **Sun’s out** — the girls sunbathing on the flybridge pads (drone shot)
+4. **Hot tub time** — all eight in the jacuzzi upstairs
+5. **Dance floor** — a dance circle on the LED floor with the party lights
+6. **Swim call** — everyone in the water behind the boat, inflatables and a beach ball
+7. **DJ Joe** — Joe on the decks with headphones, the gang dancing in front
+8. **A few drinks later…** — Ray barrel-rolling across the deck while everyone laughs
+9. **Gone fishing** — Gabriel fishing off the side deck; a dorado jumps
+10. **Selfie fail** — Gus backs up for the perfect selfie… and goes overboard (still filming)
+11. **Conga!** — the conga line… and the domino pile-up
+
+Props are built in Blender (`tools/blender/movie_props.py` → `public/models/movie_props.glb`): fishing rod,
+DJ headphones, cups, margarita, beer, phone, dorado and beach ball. The scene clips (cheers, sunbathe, swim, fish,
+dj, selfie, conga, laugh, dance2) are part of the shared character rig (`tools/blender/character.py`).
+Code: `src/movie.js`.
+
 ## Explore the yacht (physics)
 
 From the main menu press **🕹️** to walk around the yacht as one of the characters. Real physics (Rapier) runs on
@@ -201,7 +223,7 @@ Each person is generated with **Meshy v6 (image-to-3D on fal.ai)** from a T-pose
 - a **rigid head**: the face is weighted 100% to the head bone, so the expression never deforms;
 - **long hair** is detected by its texture colour (traced down from the head across UV seams) and follows the
   head and chest, never the arms, so it does not tear when the arms move;
-- clips **idle, idle2, excited, dance, wave, walk** (plus a spare `sit`);
+- clips **idle, idle2, excited, dance, wave, walk**, plus `sit` and the movie-mode clips;
 - mid-weight files: ~40k-triangle mesh, 2K color texture, 1K normal + roughness (webp) — about 3 MB each.
 
 ```bash

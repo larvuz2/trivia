@@ -7,6 +7,7 @@ import { CameraRig } from './camera.js';
 import { sfx, unlockAudio, startMusic, setAudioEnabled, setMusicState } from './audio.js';
 import { IntroDirector } from './intro.js';
 import { ExploreMode } from './explore.js';
+import { MovieMode } from './movie.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL, loadCloudConfig } from './storage.js';
 import * as G from './game.js';
 import { POINTS, builtinModel, builtinSticker } from './data.js';
@@ -47,6 +48,7 @@ let guests = []; // boys popped in next to the player (subject / ask the boys)
 let dj = null; // DJ (not a player) — spins at the booth from the cinematic onwards
 let director = null; // opening cinematic + character introductions
 let explore = null; // walk around the yacht with physics
+let movie = null; // 🎬 looping little scenes with the gang
 
 // Team 0 is shown on the left. From the stern camera, screen-left is +X in stage space.
 const SIDE = [1, -1];
@@ -101,6 +103,19 @@ async function init() {
     splash,
     characters: () => characters,
     onExit: () => showMenu(),
+  });
+  movie = new MovieMode({
+    world,
+    rig,
+    confetti,
+    splash,
+    characters: () => characters,
+    dj: () => dj,
+    onExit: () => {
+      characters.forEach((c) => { c.directed = false; c.noEmotes = false; c.bodyOverride = null; c.body.rotation.set(0, 0, 0); c.blob.visible = true; });
+      if (dj) { world.stage.add(dj.root); }
+      showMenu();
+    },
   });
   director = new IntroDirector({
     world,
@@ -427,6 +442,7 @@ function showMenu(intro = false) {
         ${canContinue ? '<button class="btn btn-secondary" data-act="continue">↻ Continue saved game</button>' : ''}
         <div class="menu-icons">
           <button class="icon-btn setup-btn" data-act="setup" title="Game Setup" aria-label="Game Setup">⚙</button>
+          <button class="icon-btn setup-btn" data-act="movie" title="Movie mode — little scenes with the gang, on loop" aria-label="Movie mode">🎬</button>
           <button class="icon-btn setup-btn" data-act="explore" title="Explore the yacht — walk around, push stools, knock bottles!" aria-label="Explore the yacht">🕹️</button>
         </div>
       </div>
@@ -440,6 +456,7 @@ function showMenu(intro = false) {
     if (a === 'continue') continueGame();
     if (a === 'setup') openSetup();
     if (a === 'explore') startExplore();
+    if (a === 'movie') startMovie();
   });
 }
 
@@ -476,6 +493,16 @@ function continueGame() {
   setMusicState('game');
   placeTeams({ instant: true });
   if (game.phase === 'final') { game.final = null; showFinalIntro(); } else startTurn();
+}
+
+function startMovie() {
+  if (!menuActive) return;
+  menuActive = false;
+  game.phase = 'movie';
+  world.startHover = false;
+  if (startLabel) startLabel.visible = false;
+  ui.innerHTML = '';
+  movie.enter();
 }
 
 async function startExplore() {
@@ -1427,6 +1454,7 @@ canvas.addEventListener('click', (e) => {
 window.addEventListener('keydown', (e) => {
   if (e.target.matches('input, textarea, select') || document.querySelector('.admin')) return;
   if (explore?.active) { if (e.key.toLowerCase() === 'f') toggleFullscreen(); explore.onKeyDown(e); return; }
+  if (movie?.active) { const mk = e.key.toLowerCase(); if (mk === 'f') toggleFullscreen(); else if (movie.onKey(mk)) e.preventDefault(); return; }
   const k = e.key.toLowerCase();
   if (director?.active) {
     if (k === 'f') toggleFullscreen();
@@ -1462,6 +1490,7 @@ function loop() {
   env?.update(dt, world.party);
   director?.update(dt);
   explore?.update(dt);
+  movie?.update(dt);
   dj?.update(dt);
   for (const c of characters) c.update(dt);
   if (startLabel?.visible) {
@@ -1492,7 +1521,7 @@ window.addEventListener('resize', () => {
 window.dispatchEvent(new Event('resize'));
 
 // Debug handle for the host's console
-window.yct = { showFarewell: (g) => { if (g) game = Object.assign(G.newGame(), g); showFarewell(); }, THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
+window.yct = { movie: () => movie, showFarewell: (g) => { if (g) game = Object.assign(G.newGame(), g); showFarewell(); }, THREE, world, rig, env: () => env, characters: () => characters, game: () => game, startGame, director: () => director, explore: () => explore, setMaxDt: (v) => { maxDt = v; } };
 
 loop();
 init();
