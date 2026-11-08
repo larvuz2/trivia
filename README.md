@@ -59,7 +59,8 @@ Open the printed URL. For the party, `npm run build` creates a `dist/` folder th
    (or press Enter) to continue. Taglines are editable in Setup → Characters.
    The loop pose is a placeholder: a rigged `.glb` with a clip named `intro` / `pose` / `showoff` plays instead
    (`walk` / `run` clips are used for walking).
-4. **Choose your teams** — press SHUFFLE: drumroll, then the couples dash (and sometimes faceplant) into two teams on deck.
+4. **Choose your teams** — press SHUFFLE: drumroll, then everyone dashes (and sometimes faceplants) into two random
+   teams on deck — not tied to couples. On the board, each team's members take turns answering.
    Shuffle again or lock the teams.
 5. **Team reveal** — Team Sunset vs Team Tidal Wave.
 6. **"NAME'S TURN!"** — every turn belongs to one player. Teams alternate and each team's girls take turns.
@@ -235,7 +236,9 @@ pip install bpy                                                                 
 BLENDER_PY=python3 tools/characters/build.sh maria                                   # -> public/models/characters/maria.glb
 ```
 
-Register new characters in `BUILTIN_MODELS` (`src/data.js`).
+Register new characters in `BUILTIN_MODELS` (`src/data.js`) and make the face sticker with
+`node tools/characters/sticker.mjs <name>`. The cast is 5 couples (`COUPLES` in `src/data.js`); intro, hangout,
+teams and movie scenes adapt to the head count.
 `tools/character-viewer.html?model=joe` (on the dev server) shows every clip side by side.
 
 On deck everyone stands in an arc behind the start pedestal, facing center stage, looping their idles and

@@ -242,19 +242,30 @@ function buildStartLabel() {
 const coupleOf = (i) => characters.filter((c) => c.data.couple === i);
 const girlOf = (couple) => characters.find((c) => c.data.couple === couple && c.data.role === 'girl');
 const boyOf = (couple) => characters.find((c) => c.data.couple === couple && c.data.role === 'boy');
-const teamChars = (t) => game.teams[t].flatMap((cp) => coupleOf(cp));
+const teamChars = (t) => (game.teams[t] || []).map((i) => characters[i]).filter(Boolean);
+/** couples present, in order (5 couples now; more is fine) */
+const coupleIds = () => [...new Set(characters.map((c) => c.data.couple))].sort((a, b) => a - b);
+/** everyone, couples side by side (girl, then her guy) */
+const byCouples = () => coupleIds().flatMap((cp) => [girlOf(cp), boyOf(cp)]).filter(Boolean);
+/** saves from before random teams held couple indices: turn them into people */
+function upgradeTeams(g) {
+  if (g.people || !g.teams?.[0]?.length) return;
+  g.teams = g.teams.map((cps) => cps.flatMap((cp) => characters.map((c, i) => (c.data.couple === cp ? i : -1)).filter((i) => i >= 0)));
+  g.people = true;
+}
 const teamName = (t) => config.settings.teamNames[t];
 const teamColor = (t) => config.settings.teamColors[t];
-const activeGirl = (t) => girlOf(G.activeCouple(game, t)) || teamChars(t)[0];
+const activeGirl = (t) => characters[G.activePlayer(game, t)] || teamChars(t)[0];   // whoever's turn it is on that team
 
 /** Everyone hanging out on deck: standing in an arc around center stage, all facing it. */
 function hangOutPlan() {
   const [sx, sz] = spots().start;
   const R = 3.2;
   // couples side by side, alternating around the arc behind the pedestal (so they face the game camera)
-  const order = [0, 1, 2, 3].flatMap((cp) => [girlOf(cp), boyOf(cp)]);
+  const order = byCouples();
+  const mid = (order.length - 1) / 2;
   return order.map((ch, i) => {
-    const th = ((i - 3.5) / 3.5) * 1.3; // -75deg .. +75deg, all behind the pedestal (+z)
+    const th = ((i - mid) / Math.max(1, mid)) * 1.35; // spread around the back of the pedestal (+z)
     const x = sx + Math.sin(th) * R;
     const z = sz + Math.cos(th) * R;
     return [ch, x, z, Math.atan2(sx - x, sz - z), 'idle'];
@@ -269,22 +280,22 @@ function hangOut(instant = false) {
   }
 }
 
-function teamSpot(team, k, role) {
-  const list = spots().team[team];
-  return list[(role === 'girl' ? 0 : 2) + k];
+/** k-th member of a team: two staggered rows on that team's side of the deck (fits up to 6) */
+function teamSpot(team, k) {
+  const s = SIDE[team];
+  return [s * (2.5 + Math.floor(k / 2) * 1.25 + (k % 2) * 0.35), -5.0 + (k % 2) * 1.1];
 }
 
 function placeTeams({ instant = false, stumbles = 0 } = {}) {
+  upgradeTeams(game);
   const runners = [];
-  game.teams.forEach((couples, t) => {
-    couples.forEach((cp, k) => {
-      for (const ch of coupleOf(cp)) {
-        const [x, z] = teamSpot(t, k, ch.data.role);
-        const f = Math.PI + SIDE[t] * 0.25;
-        ch.pop(true, instant);
-        if (instant) ch.place(x, z, f);
-        else runners.push([ch, x, z, f]);
-      }
+  game.teams.forEach((_, t) => {
+    teamChars(t).forEach((ch, k) => {
+      const [x, z] = teamSpot(t, k);
+      const f = Math.PI + SIDE[t] * 0.25;
+      ch.pop(true, instant);
+      if (instant) ch.place(x, z, f);
+      else runners.push([ch, x, z, f]);
     });
   });
   const stumblers = new Set();
@@ -544,6 +555,7 @@ function continueGame() {
   menuActive = false;
   if (startLabel) startLabel.visible = false;
   game = Object.assign(G.newGame(), savedGame);
+  upgradeTeams(game);
   if (game.phase === 'question') G.cancelQuestion(game);
   setMusicState('game');
   placeTeams({ instant: true });
@@ -614,13 +626,13 @@ function showTeams() {
   rig.setShift(0);
   rig.shot(...shots.team(), 2.2);
   const n = setScreen(`
-    <div class="top-title"><div class="kicker">STEP 1</div><h2>CHOOSE YOUR TEAMS</h2><p>Four couples. Two teams. Couples always stay together.</p></div>
+    <div class="top-title"><div class="kicker">STEP 1</div><h2>CHOOSE YOUR TEAMS</h2><p>${characters.length} people. Two teams. Totally random!</p></div>
     <div class="shuffle-result" id="shuffle-result"></div>
     <div class="bottom-actions">
-      <button class="btn btn-play" data-act="shuffle">🎲 SHUFFLE COUPLES</button>
+      <button class="btn btn-play" data-act="shuffle">🎲 SHUFFLE TEAMS</button>
       <button class="btn btn-secondary hidden" data-act="lock">🔒 LOCK TEAMS</button>
     </div>
-    <div class="shuffle-count" id="shuffle-count">Six possible pairings</div>
+    <div class="shuffle-count" id="shuffle-count">Anyone can end up with anyone</div>
     <button class="btn btn-ghost corner-left" data-act="menu">← Menu</button>
   `, 'screen-shuffle');
   let busy = false;
@@ -638,7 +650,7 @@ function showTeams() {
       sfx('drumroll');
       characters.forEach((c) => c.react('surprise', 0.8));
       await wait(1700);
-      G.shuffleTeams(game);
+      G.shuffleTeams(game, characters.length);
       placeTeams({ stumbles: 1 + Math.floor(Math.random() * 2) });
       sfx('whoosh');
       await wait(2600);
@@ -649,9 +661,9 @@ function showTeams() {
       n.querySelector('#shuffle-result').innerHTML = [0, 1].map((t) => `
         <div class="team-chip team-${t}" style="--team:${teamColor(t)}">
           <div class="team-chip-name">${esc(teamName(t))}</div>
-          <div class="team-chip-couples">${game.teams[t].map((cp) => `<span>${coupleOf(cp).map((c) => stickerImg(c, 'sm')).join('')}${esc(girlOf(cp)?.data.name)} &amp; ${esc(boyOf(cp)?.data.name)}</span>`).join('')}</div>
+          <div class="team-chip-couples">${teamChars(t).map((c) => `<span>${stickerImg(c, 'sm')}${esc(c.data.name)}</span>`).join('')}</div>
         </div>`).join('<div class="vs">VS</div>');
-      n.querySelector('#shuffle-count').textContent = `Shuffle #${game.shuffleCount} · Six possible pairings · Couples always stay together`;
+      n.querySelector('#shuffle-count').textContent = `Shuffle #${game.shuffleCount} · Random teams · Shuffle again until you like it`;
       n.querySelector('[data-act=shuffle]').innerHTML = '🎲 SHUFFLE AGAIN';
       n.querySelector('[data-act=shuffle]').disabled = false;
       n.querySelector('[data-act=lock]').classList.remove('hidden');
@@ -1162,7 +1174,8 @@ function askTheBoys() {
   if (!G.useAskTheBoys(game, team)) return toast(`${esc(teamName(team))} already used their hint!`, 'small');
   persist();
   sfx('fanfare');
-  teamChars(team).filter((c) => c.data.role === 'boy').forEach((b, i) => addGuest(b, i, 'point', 'think'));
+  const boys = teamChars(team).filter((c) => c.data.role === 'boy' && c !== player);
+  (boys.length ? boys : teamChars(team).filter((c) => c !== player)).slice(0, 4).forEach((b, i) => addGuest(b, i, 'point', 'think'));
   toast(`🎤 ASK THE BOYS!<br><small>${esc(teamName(team))} may ask ONE boy for a cryptic clue (no giving it away!)</small>`, 'ask', 3500);
   if (timer) timer.left = Math.min(timer.total, timer.left + 10);
   refreshScores();
@@ -1360,9 +1373,9 @@ function showFarewell() {
   rig.setShift(0);
   rig.stopOrbit?.();
   // couples side by side in one row, facing the camera out on the water
-  const row = [0, 1, 2, 3].flatMap((cp) => [girlOf(cp), boyOf(cp)]).filter(Boolean);
+  const row = byCouples();
   row.forEach((c, i) => {
-    const x = (i - (row.length - 1) / 2) * 1.05;
+    const x = (i - (row.length - 1) / 2) * Math.min(1.05, 9.0 / Math.max(1, row.length - 1));
     c.target = null;
     c.place(x, STERN.z + (i % 2 ? 0.2 : -0.1), Math.PI + x * 0.03, 'idle');
     c.root.position.y = STERN.y;

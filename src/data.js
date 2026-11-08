@@ -4,8 +4,8 @@
 export const CONFIG_VERSION = 1;
 
 const COLORS = {
-  boys: ['#3d8bfd', '#20b486', '#f08c2e', '#8b5cf6'],
-  girls: ['#ff6b8b', '#ffb020', '#22c3d6', '#e055c8'],
+  boys: ['#3d8bfd', '#20b486', '#f08c2e', '#8b5cf6', '#e0533d'],
+  girls: ['#ff6b8b', '#ffb020', '#22c3d6', '#e055c8', '#7bc043'],
 };
 
 // Rigged characters that ship with the game (tools/blender/character.py), matched by name.
@@ -19,6 +19,7 @@ export const BUILTIN_MODELS = {
   pau: 'models/characters/pau.glb',
   karla: 'models/characters/karla.glb',
   caro: 'models/characters/caro.glb',
+  jp: 'models/characters/jp.glb',
 };
 // Face stickers made from each person's original picture (tools/characters/sticker.mjs)
 export function builtinSticker(name) {
@@ -28,17 +29,18 @@ export function builtinSticker(name) {
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
-const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Gus'];
-const GIRL_NAMES = ['Karla', 'Pau', 'Baby', 'Caro'];
+const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Gus', 'JP'];
+const GIRL_NAMES = ['Karla', 'Pau', 'Baby', 'Caro', 'Girl 5'];
+export const COUPLES = 5;
 
 const TAGLINES = {
-  boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card'],
-  girls: ['The Brains', 'The Trivia Queen', 'The Secret Weapon', 'The Closer'],
+  boys: ['The Captain', 'The Legend', 'The Party Starter', 'The Wild Card', 'The Surprise Guest'],
+  girls: ['The Brains', 'The Trivia Queen', 'The Secret Weapon', 'The Closer', 'The Plot Twist'],
 };
 
 export function defaultCharacters() {
   const chars = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < COUPLES; i++) {
     chars.push({
       id: `boy${i + 1}`,
       name: BOY_NAMES[i],

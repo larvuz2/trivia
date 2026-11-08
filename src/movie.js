@@ -11,7 +11,7 @@ const smooth = (t) => { t = clamp01(t); return t * t * (3 - 2 * t); };
 class Cut extends Error {}
 
 // The cast by name (falls back to the default slot if someone was renamed in Setup)
-const SLOT = { joe: 'boy1', ray: 'boy2', gabriel: 'boy3', gus: 'boy4', karla: 'girl1', pau: 'girl2', baby: 'girl3', caro: 'girl4' };
+const SLOT = { joe: 'boy1', ray: 'boy2', gabriel: 'boy3', gus: 'boy4', jp: 'boy5', karla: 'girl1', pau: 'girl2', baby: 'girl3', caro: 'girl4' };
 
 // Stage space: the party deck is y = 0; the sea is y = -3; the flybridge deck is y = 2.95.
 const WATER = -3;
@@ -37,7 +37,14 @@ export class MovieMode {
     const cs = this.characters();
     return cs.find((c) => c.data.name.trim().toLowerCase() === name) || cs.find((c) => c.data.id === SLOT[name]);
   }
-  get all() { return ['karla', 'joe', 'pau', 'ray', 'baby', 'gabriel', 'caro', 'gus'].map((n) => this.who(n)).filter(Boolean); }
+  /** everyone, couples side by side (girl then her guy) — works for any number of couples */
+  get all() {
+    const cs = this.characters();
+    const ids = [...new Set(cs.map((c) => c.data.couple))].sort((a, b) => a - b);
+    return ids.flatMap((cp) => ['girl', 'boy'].map((r) => cs.find((c) => c.data.couple === cp && c.data.role === r))).filter(Boolean);
+  }
+  /** everyone not already used by a scene */
+  rest(used) { const u = new Set(used.filter(Boolean)); return this.all.filter((c) => !u.has(c)); }
 
   // ------------------------------------------------------------------ lifecycle
   async enter() {
@@ -279,7 +286,7 @@ export class MovieMode {
     this.world.setParty(1);
     const row = this.all;
     row.forEach((c, i) => {
-      const x = (i - (row.length - 1) / 2) * 1.05;
+      const x = (i - (row.length - 1) / 2) * Math.min(1.05, 9.0 / Math.max(1, row.length - 1));
       this.put(c, x, -2.2, -11.55 + (i % 2 ? 0.2 : -0.1), Math.PI + x * 0.03, 'idle');
     });
     this.cam([0, 2.1, -20.0], [0, -1.2, -9.4], 44);
@@ -305,9 +312,9 @@ export class MovieMode {
   // 2 ── the boys at the bar, toasting
   barSetup() {
     this.world.setParty(0.7);
-    const boys = ['joe', 'ray', 'gabriel', 'gus'].map((n) => this.who(n));
-    const xs = [1.75, 2.95, 4.15, 5.35];
-    const drinks = ['cup', 'margarita', 'beer', 'cup'];
+    const boys = this.all.filter((c) => c.data.role === 'boy');
+    const xs = boys.map((_, i) => 1.75 + i * (3.6 / Math.max(1, boys.length - 1)));
+    const drinks = ['cup', 'margarita', 'beer', 'cup', 'beer', 'margarita'];
     boys.forEach((c, i) => {
       this.put(c, xs[i], 0, 3.5, (3.55 - xs[i]) * 0.18, 'cheers', 0);
       this.hold(c, drinks[i]);
@@ -346,6 +353,13 @@ export class MovieMode {
     lie(this.who('pau'), 4.95);
     lie(this.who('baby'), -3.85);
     lie(this.who('caro'), -4.95);
+    // any other girls: on beach towels on the teak deck in front of the tub
+    this.rest([this.who('karla'), this.who('pau'), this.who('baby'), this.who('caro')]).filter((c) => c.data.role === 'girl').forEach((c, i) => {
+      this.put(c, (i % 2 ? 1 : -1) * 0.7 * (1 + Math.floor(i / 2)), FLY + 0.22, 1.7, Math.PI, 'sunbathe');
+      const q = new THREE.Quaternion().setFromAxisAngle(V(1, 0, 0), -Math.PI / 2);
+      c.bodyOverride = (b) => { b.position.set(0, 0, 0); b.quaternion.copy(q); };
+      c.blob.visible = false;
+    });
     this.cam([-1.5, 12.5, 2.2], [0, FLY, 5.2], 50);
   }
   async sunRun() {
@@ -363,11 +377,13 @@ export class MovieMode {
     const cz = 4.8;
     const water = FLY + 0.66;
     const states = ['idle', 'cheers', 'laugh', 'idle2', 'cheers', 'idle', 'laugh', 'idle2'];
+    const tubN = this.all.length;
     this.all.forEach((c, i) => {
-      const a = (i / 8) * Math.PI * 2 + 0.2;
-      const x = cx + Math.sin(a) * 1.3;
-      const z = cz + Math.cos(a) * 1.3;
-      this.put(c, x, water - 0.95, z, Math.atan2(cx - x, cz - z), states[i]);
+      const a = (i / tubN) * Math.PI * 2 + 0.2;
+      const rr = tubN > 8 ? 1.42 : 1.3;
+      const x = cx + Math.sin(a) * rr;
+      const z = cz + Math.cos(a) * rr;
+      this.put(c, x, water - 0.95, z, Math.atan2(cx - x, cz - z), states[i % states.length]);
       c.blob.visible = false;
     });
     this.hold(this.who('ray'), 'margarita');
@@ -407,9 +423,11 @@ export class MovieMode {
     }
     // a dance circle facing out, so the circling camera always sees faces
     const moves = ['dance', 'dance2', 'excited'];
+    const circleN = this.all.length;
+    const circleR = circleN > 8 ? 1.75 : 1.55;
     this.all.forEach((c, i) => {
-      const a = (i / 8) * Math.PI * 2;
-      this.put(c, Math.sin(a) * 1.55, 0, -2 + Math.cos(a) * 1.55, a + (Math.random() - 0.5) * 0.4, moves[i % 3]);
+      const a = (i / circleN) * Math.PI * 2;
+      this.put(c, Math.sin(a) * circleR, 0, -2 + Math.cos(a) * circleR, a + (Math.random() - 0.5) * 0.4, moves[i % 3]);
     });
     let acc = 0;
     this.tick = (dt) => {
@@ -433,7 +451,7 @@ export class MovieMode {
   // 6 ── swimming behind the boat
   swimSetup() {
     this.world.setParty(0);
-    const spots = [[-3.6, -14.0], [-2.3, -15.3], [-1.0, -13.7], [0.3, -15.6], [1.5, -13.9], [2.7, -15.2], [3.9, -14.1], [-0.4, -17.0]];
+    const spots = [[-3.6, -14.0], [-2.3, -15.3], [-1.0, -13.7], [0.3, -15.6], [1.5, -13.9], [2.7, -15.2], [3.9, -14.1], [-0.4, -17.0], [-2.7, -17.3], [2.1, -17.2], [4.4, -16.4], [-4.6, -16.2]];
     this.all.forEach((c, i) => {
       const [x, z] = spots[i];
       this.put(c, x, WATER - 1.0, z, Math.atan2(-x * 0.3, -20 - z) + Math.PI * 0, 'swim');
@@ -486,8 +504,8 @@ export class MovieMode {
     this.put(joe, s[0], 0.42, s[1], Math.PI, 'dj');
     this.headphones(joe);
     const crowd = this.all.filter((c) => c !== joe);
-    const spots = [[-5.2, 2.3], [-4.2, 2.0], [-3.1, 2.2], [-2.1, 2.5], [-4.7, 3.3], [-3.6, 3.15], [-2.6, 3.4]];
-    const moves = ['dance', 'dance2', 'excited', 'dance2', 'dance', 'excited', 'dance2'];
+    const spots = [[-5.2, 2.3], [-4.2, 2.0], [-3.1, 2.2], [-2.1, 2.5], [-4.7, 3.3], [-3.6, 3.15], [-2.6, 3.4], [-5.6, 3.6], [-1.6, 3.4], [-1.2, 2.2], [-5.9, 2.4]];
+    const moves = ['dance', 'dance2', 'excited', 'dance2', 'dance', 'excited', 'dance2', 'dance', 'excited', 'dance2', 'dance'];
     crowd.forEach((c, i) => this.put(c, spots[i][0], 0, spots[i][1], this.faceTo({ root: { position: V(spots[i][0], 0, spots[i][1]) } }, s[0], s[1]), moves[i]));
     let acc = 0;
     this.tick = (dt) => {
@@ -540,6 +558,7 @@ export class MovieMode {
       if (i % 3 === 1) this.hold(c, ['cup', 'margarita', 'beer'][i % 3]);
     });
     this.hold(this.who('pau'), 'margarita');
+    this.rest([this.who('ray'), ...fans.map(([n]) => this.who(n))]).forEach((c, i) => this.put(c, -1.4 + i * 2.6, 0, 2.0, Math.PI, i % 2 ? 'laugh' : 'cheers'));
     this.cam([x0 + 0.6, 0.45, -4.6], [x0, 0.4, -1.4], 46);
     this.rig.follow(() => ({ pos: this.sw(this.rollX + 0.9, 0.75, -5.4), look: this.sw(this.rollX - 0.5, 0.55, -1.0) }));
   }
@@ -715,7 +734,8 @@ export class MovieMode {
     const w = this.world;
     w.setIntroMode(true);
     w.setParty(1);
-    const line = ['joe', 'karla', 'ray', 'pau', 'gabriel', 'baby', 'gus', 'caro'].map((n) => this.who(n)).filter(Boolean);
+    const named = ['joe', 'karla', 'ray', 'pau', 'gabriel', 'baby', 'gus', 'caro'].map((n) => this.who(n)).filter(Boolean);
+    const line = [...named, ...this.rest(named)];
     const C = V(0, 0, -1.8);
     const R = 2.7;
     const speed = 1.05;

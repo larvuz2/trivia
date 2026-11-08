@@ -386,7 +386,7 @@ export class IntroDirector {
     const chars = this.characters();
     // couple by couple: the girl, then her guy
     this.queue = [];
-    for (let cp = 0; cp < 4; cp++) {
+    for (const cp of [...new Set(chars.map((c) => c.data.couple))].sort((a, b) => a - b)) {
       for (const role of ['girl', 'boy']) {
         const c = chars.find((x) => x.data.couple === cp && x.data.role === role);
         if (c) this.queue.push(c);
@@ -508,7 +508,8 @@ export class IntroDirector {
     sfx('airhorn');
     setMusicState('party', 0.2);
     // pull back to reveal the whole gang
-    this.rig.shot(this.sw(0.4, 1.7, -4.8), this.sw(-0.6, 1.35, 3.0), 2.6, 'inOut');
+    const back = Math.max(0, this.queue.length - 8) * 0.45;   // pull back a little for a bigger gang
+    this.rig.shot(this.sw(0.4, 1.7 + back * 0.3, -4.8 - back), this.sw(-0.6, 1.35, 3.0), 2.6, 'inOut');
     await wait(2600);
     if (this.aborted) return;
     this.queue.forEach((c) => c.react('cheer', 1.8));
@@ -522,7 +523,7 @@ export class IntroDirector {
     sfx('cheer');
     setTimeout(() => sfx('cheer'), 900);
     if (this.aborted) return;
-    await this.titleCard(null, { kicker: 'TONIGHT’S CREW', name: 'THE GANG’S ALL HERE!', tagline: 'Four couples. Two teams. One yacht.', color: '#ff7a45' });
+    await this.titleCard(null, { kicker: 'TONIGHT’S CREW', name: 'THE GANG’S ALL HERE!', tagline: `${['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'][this.queue.length / 2] || this.queue.length / 2} couples. Two teams. One yacht.`, color: '#ff7a45' });
     if (this.aborted) return;
     this.setTV('start');
     this.state = 'final';
@@ -536,14 +537,17 @@ export class IntroDirector {
   }
 
   lineup() {
-    // an arc of eight facing the camera, centred on the mark (couples next to each other)
+    // an arc of everyone facing the camera, centred on the mark (couples next to each other)
+    const n = this.queue.length;
+    const mid = (n - 1) / 2;
+    const half = 2.35 + Math.max(0, n - 8) * 0.25;   // a bit wider for more people
     const pts = [];
-    for (let i = 0; i < 8; i++) {
-      const u = (i - 3.5) / 3.5;
-      pts.push([GANG_X + u * 2.35, MARK.z + 0.3 + Math.abs(u) * 0.25 + (i % 2) * 0.55]);
+    for (let i = 0; i < n; i++) {
+      const u = (i - mid) / Math.max(1, mid);
+      pts.push([GANG_X + u * half, MARK.z + 0.3 + Math.abs(u) * 0.25 + (i % 2) * 0.55]);
     }
     // the last one to arrive takes the centre slot; everyone else fills in left to right
-    const centre = pts.splice(4, 1)[0];
+    const centre = pts.splice(Math.floor(n / 2), 1)[0];
     return [...pts, centre];
   }
 

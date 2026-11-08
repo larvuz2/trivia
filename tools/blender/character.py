@@ -319,6 +319,8 @@ def skin(obj, rig, J, m):
     neck_ring = [-v.co.y for v in vs if abs(v.co.z - m['neck_y']) < 0.02 and abs(v.co.x) < 0.1]
     zc = sorted(neck_ring)[len(neck_ring) // 2] if neck_ring else 0.0
     short_hair = set() if long_hair else {i for i in hair if vs[i].co.z > m['neck_y'] - 0.15 and -vs[i].co.y < zc - 0.05}
+    # short hair hanging beside the neck down to arm height (e.g. JP): rigid with the head, never the arms
+    side_hair = set() if long_hair else set(hair)
     groups = {n: obj.vertex_groups.new(name=n) for n in J}
     segs = {n: (Vector(h), Vector(t)) for n, (h, t) in J.items()}  # game space
     ay = m['arm_y']
@@ -340,7 +342,7 @@ def skin(obj, rig, J, m):
         split = m.get('side_split')
         on_shoulder = ax > sx * 0.95 and p.y < (split or ay + 0.15)   # sleeve tops belong to the arm
         beside_head = split is not None and ax > sx * 0.95 and p.y >= split  # ears, sideburns, hair at the sides
-        if v.index in short_hair or (beside_head and p.y > neck_y - 0.02) or (
+        if v.index in short_hair or (v.index in side_hair and p.y > ay - 0.1) or (beside_head and p.y > neck_y - 0.02) or (
                 p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25) and not on_shoulder):  # wide hair/ears too
             cands = ['head']                                   # rigid head: the face never deforms
         elif beside_head or (p.y > neck_y - 0.04 and ax < sx * 1.4 and not on_shoulder):

@@ -1,20 +1,14 @@
 // Pure game rules + state. The whole object is JSON so it survives a page refresh.
 import { POINTS } from './data.js';
 
-// The three ways to split 4 couples into 2 pairs; with side swaps that's 6 outcomes.
-const SPLITS = [
-  [[0, 1], [2, 3]],
-  [[0, 2], [1, 3]],
-  [[0, 3], [1, 2]],
-];
-
 export function newGame() {
   return {
     phase: 'menu',
-    teams: [[0, 2], [1, 3]],
+    teams: [[], []], // character indices per team (random, not tied to couples); filled by shuffleTeams
     scores: [0, 0],
     turn: 0,
-    pickIdx: [0, 0], // which couple of each team plays next (the girls alternate)
+    pickIdx: [0, 0], // whose turn it is inside each team (everyone takes turns)
+    people: true, // teams hold people, not couples (older saves held couple indices)
     used: {},
     doubleKey: null,
     askUsed: [false, false],
@@ -26,20 +20,26 @@ export function newGame() {
   };
 }
 
-export function shuffleTeams(g) {
-  const prevKey = JSON.stringify(g.teams);
+/** Random teams: everybody shuffled, split as evenly as possible (never the same split twice in a row). */
+export function shuffleTeams(g, count) {
+  const norm = (t) => JSON.stringify(t.map((x) => [...x].sort((a, b) => a - b)));
+  const prevKey = norm(g.teams || [[], []]);
   let teams;
+  let tries = 0;
   do {
-    const split = SPLITS[Math.floor(Math.random() * SPLITS.length)];
-    teams = Math.random() < 0.5 ? [split[0], split[1]] : [split[1], split[0]];
-  } while (JSON.stringify(teams) === prevKey);
-  g.teams = teams.map((t) => [...t]);
+    const ids = Array.from({ length: count }, (_, i) => i);
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+    const half = Math.ceil(count / 2);
+    teams = Math.random() < 0.5 ? [ids.slice(0, half), ids.slice(half)] : [ids.slice(half), ids.slice(0, half)];
+  } while (norm(teams) === prevKey && ++tries < 20);
+  g.teams = teams;
+  g.people = true;
   g.shuffleCount++;
   return g.teams;
 }
 
-export function teamOfCouple(g, couple) {
-  return g.teams[0].includes(couple) ? 0 : 1;
+export function teamOf(g, person) {
+  return g.teams[0].includes(person) ? 0 : 1;
 }
 
 export function startBoard(g, settings) {
@@ -74,10 +74,11 @@ export function undo(g) {
   return true;
 }
 
-/** Couple index whose girl plays for `team` right now. */
-export function activeCouple(g, team) {
-  const idx = (g.pickIdx || [0, 0])[team] % 2;
-  return g.teams[team][idx];
+/** Character index (into the characters list) who plays for `team` right now — everyone takes turns. */
+export function activePlayer(g, team) {
+  const list = g.teams[team] || [];
+  if (!list.length) return 0;
+  return list[((g.pickIdx || [0, 0])[team] || 0) % list.length];
 }
 
 export function pickTile(g, c, r) {
@@ -135,7 +136,7 @@ export function finishQuestion(g) {
   if (!cur) return;
   g.used[cur.key] = true;
   g.pickIdx = g.pickIdx || [0, 0];
-  g.pickIdx[cur.picker] = (g.pickIdx[cur.picker] + 1) % 2;
+  g.pickIdx[cur.picker] = (g.pickIdx[cur.picker] || 0) + 1;
   g.turn = 1 - cur.picker;
   g.current = null;
   g.phase = 'board';

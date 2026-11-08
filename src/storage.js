@@ -35,7 +35,9 @@ function normalize(cfg) {
     const oldNames = ['TEAM SUNSET', 'TEAM TIDAL WAVE'];
     cfg.settings.teamNames = (cfg.settings.teamNames || def.settings.teamNames).map((n, i) => (n === oldNames[i] ? def.settings.teamNames[i] : n));
     cfg.final = { ...def.final, ...cfg.final };
-    cfg.characters = cfg.characters?.length === 8 ? cfg.characters : def.characters;
+    // keep the saved people; anyone new in the defaults (e.g. the 5th couple) is added
+    if (!Array.isArray(cfg.characters) || !cfg.characters.length) cfg.characters = def.characters;
+    else for (const d of def.characters) if (!cfg.characters.some((c) => c.id === d.id)) cfg.characters.push(d);
     // placeholder names from older saves pick up the new default names (e.g. "Guy 1" -> "Joe")
     for (const c of cfg.characters) {
       const d = def.characters.find((x) => x.id === c.id);

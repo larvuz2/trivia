@@ -91,7 +91,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
               </div>
               <div class="row">
                 <label>Role<select data-f="role"><option value="girl" ${c.role === 'girl' ? 'selected' : ''}>Girl (player)</option><option value="boy" ${c.role === 'boy' ? 'selected' : ''}>Boy (subject)</option></select></label>
-                <label>Couple<select data-f="couple">${[0, 1, 2, 3].map((k) => `<option value="${k}" ${c.couple === k ? 'selected' : ''}>Couple ${k + 1}</option>`).join('')}</select></label>
+                <label>Couple<select data-f="couple">${[0, 1, 2, 3, 4].map((k) => `<option value="${k}" ${c.couple === k ? 'selected' : ''}>Couple ${k + 1}</option>`).join('')}</select></label>
                 <label>Color<input type="color" data-f="color" value="${c.color}"></label>
               </div>
             </div>
@@ -105,7 +105,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
           </div>
         </div>`;
       }));
-      return `<p class="hint">Four couples, eight people. The <b>girls</b> are the players; the <b>boys</b> are the subjects of the questions (and the judges!). Upload a face sticker and, later, a rigged <b>.glb</b> model for each person. Animation clips named <i>idle, run, cheer, sad, laugh, dance, surprise</i> are used automatically.</p>
+      return `<p class="hint">Five couples, ten people. Teams are shuffled at random and everyone takes turns answering; the <b>boys</b> are the subjects of many questions (and the judges!). Upload a face sticker and, later, a rigged <b>.glb</b> model for each person. Animation clips named <i>idle, run, cheer, sad, laugh, dance, surprise</i> are used automatically.</p>
         <div class="grid2">${cards.join('')}</div>`;
     }
     if (tab === 'categories') {
