@@ -20,6 +20,7 @@ export const BUILTIN_MODELS = {
   karla: 'models/characters/karla.glb',
   caro: 'models/characters/caro.glb',
   jp: 'models/characters/jp.glb',
+  fer: 'models/characters/fer.glb',
 };
 // Face stickers made from each person's original picture (tools/characters/sticker.mjs)
 export function builtinSticker(name) {
@@ -30,7 +31,7 @@ export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }
 const BOY_NAMES = ['Joe', 'Ray', 'Gabriel', 'Gus', 'JP'];
-const GIRL_NAMES = ['Karla', 'Pau', 'Baby', 'Caro', 'Girl 5'];
+const GIRL_NAMES = ['Karla', 'Pau', 'Baby', 'Caro', 'Fer'];
 export const COUPLES = 5;
 
 const TAGLINES = {

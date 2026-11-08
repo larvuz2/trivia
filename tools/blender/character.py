@@ -308,7 +308,7 @@ def find_long_hair(obj, m):
         seen |= nxt
         front = nxt
     members = member_all
-    idx = [i for r in seen for i in members.get(r, ()) if P[i, 1] <= neck + 0.04]
+    idx = [i for r in seen for i in members.get(r, ()) if P[i, 1] <= neck + 0.1]
     print('long hair: colour', hair.round(3), 'vertices below the neck:', len(idx))
     return set(idx)
 
@@ -334,13 +334,19 @@ def skin(obj, rig, J, m):
         p = Vector((v.co.x, v.co.z, -v.co.y))
         side = 'L' if p.x >= 0 else 'R'
         ax = abs(p.x)
+        if v.index in hair and v.index not in long_hair and p.y > neck_y - 0.03:
+            # hair right at the neck line (e.g. strands beside the jaw) is never shoulder: rigid with the head
+            groups['head'].add([v.index], 1.0, 'REPLACE')
+            continue
         if v.index in long_hair:
             # hair hanging over the shoulders: follows the head near the neck, the chest lower down,
             # never the arms (so it doesn't tear when the arms move)
             f = max(0.0, min(1.0, (p.y - (ay - 0.45)) / max(0.05, neck_y - (ay - 0.45))))
-            f = f * f
-            groups['head'].add([v.index], 0.15 + 0.6 * f, 'REPLACE')
-            groups['chest'].add([v.index], 0.85 - 0.6 * f, 'REPLACE')
+            # fully on the head at the jaw/neck (no stretched strands), blending onto the chest lower down
+            hw = min(1.0, 0.1 + 0.9 * f ** 1.5)
+            groups['head'].add([v.index], hw, 'REPLACE')
+            if hw < 1.0:
+                groups['chest'].add([v.index], 1.0 - hw, 'REPLACE')
             continue
         split = m.get('side_split')
         on_shoulder = ax > sx * 0.95 and p.y < (split or ay + 0.15)   # sleeve tops belong to the arm

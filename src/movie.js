@@ -11,7 +11,7 @@ const smooth = (t) => { t = clamp01(t); return t * t * (3 - 2 * t); };
 class Cut extends Error {}
 
 // The cast by name (falls back to the default slot if someone was renamed in Setup)
-const SLOT = { joe: 'boy1', ray: 'boy2', gabriel: 'boy3', gus: 'boy4', jp: 'boy5', karla: 'girl1', pau: 'girl2', baby: 'girl3', caro: 'girl4' };
+const SLOT = { joe: 'boy1', ray: 'boy2', gabriel: 'boy3', gus: 'boy4', jp: 'boy5', fer: 'girl5', karla: 'girl1', pau: 'girl2', baby: 'girl3', caro: 'girl4' };
 
 // Stage space: the party deck is y = 0; the sea is y = -3; the flybridge deck is y = 2.95.
 const WATER = -3;
