@@ -120,7 +120,10 @@ def measure(obj):
             break
     if side_split is not None and side_split >= neck_y:
         side_split = None   # a gap at/above the neck is inside a tall collar, not between shoulder and ear
-    return {'arm_y': arm_y, 'reach': reach, 'torso_w': torso_w, 'neck_y': neck_y, 'side_split': side_split}
+    # the head's own half-width (a slim body with a big head of hair, like JP's, is much wider up there)
+    hx = sorted(abs(x) for x, y, z in pts if neck_y + 0.12 < y < neck_y + 0.45)
+    head_w = hx[int(len(hx) * 0.99)] if hx else torso_w
+    return {'arm_y': arm_y, 'reach': reach, 'torso_w': torso_w, 'neck_y': neck_y, 'side_split': side_split, 'head_w': head_w}
 
 
 # --------------------------------------------------------------------------- skeleton
@@ -343,7 +346,7 @@ def skin(obj, rig, J, m):
         on_shoulder = ax > sx * 0.95 and p.y < (split or ay + 0.15)   # sleeve tops belong to the arm
         beside_head = split is not None and ax > sx * 0.95 and p.y >= split  # ears, sideburns, hair at the sides
         if v.index in short_hair or (v.index in side_hair and p.y > ay - 0.1) or (beside_head and p.y > neck_y - 0.02) or (
-                p.y > neck_y + 0.04 and (ax < sx * 1.6 or p.y > ay + 0.25) and not on_shoulder):  # wide hair/ears too
+                p.y > neck_y + 0.04 and (ax < max(sx * 1.6, m.get('head_w', 0) * 1.05) or p.y > ay + 0.25) and not on_shoulder):  # wide hair/ears too
             cands = ['head']                                   # rigid head: the face never deforms
         elif beside_head or (p.y > neck_y - 0.04 and ax < sx * 1.4 and not on_shoulder):
             cands = ['head', 'neck']
