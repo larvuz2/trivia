@@ -711,6 +711,22 @@ def anim_dance2(t, T):
     return p
 
 
+def anim_showring(t, T):
+    """Engagement ring reveal: left hand up beside the face, fingers wiggling, head tilted to it; a happy bounce."""
+    w = 2 * math.pi * t / T
+    wig = S(w * 3)
+    p = {}
+    p['upperarm.L'] = [(Z, -0.25), (Y, -1.05)]
+    p['forearm.L'] = [(Z, 1.75)]
+    p['hand.L'] = [(X, -0.35), (Z, 0.25 * wig)]
+    p['upperarm.R'] = [(Z, 1.2), (X, -0.15)]   # right arm relaxed, a touch forward
+    p['forearm.R'] = [(Z, 0.25)]
+    p['chest'] = [(Z, 0.05 * S(w)), (X, -0.05)]
+    p['head'] = [(Z, -0.12 + 0.05 * S(w)), (Y, 0.18), (X, 0.05)]
+    p['_hips_offset'] = (0, 0.02 * abs(S(w * 2)), 0)
+    return p
+
+
 ANIMS = [
     ('idle', anim_idle, 2.4),
     ('idle2', anim_idle2, 4.0),
@@ -728,6 +744,7 @@ ANIMS = [
     ('conga', anim_conga, 0.8),
     ('laugh', anim_laugh, 1.6),
     ('dance2', anim_dance2, 1.2),
+    ('showring', anim_showring, 2.0),
 ]
 
 

@@ -32,6 +32,11 @@ export const CHARACTER_HEIGHT = { jp: 1.15 };
 export function heightOf(name) {
   return CHARACTER_HEIGHT[String(name || '').trim().toLowerCase()] || 1;
 }
+// Per-character extras: an engagement ring on Caro's left hand, and her intro move (showing it off)
+export const CHARACTER_EXTRAS = { caro: { ring: true, intro: ['showring'] } };
+export function extrasOf(name) {
+  return CHARACTER_EXTRAS[String(name || '').trim().toLowerCase()] || {};
+}
 export function builtinModel(name) {
   return BUILTIN_MODELS[String(name || '').trim().toLowerCase()] || null;
 }

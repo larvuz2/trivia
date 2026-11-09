@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { heightOf } from './data.js';
+import { heightOf, extrasOf } from './data.js';
 
 /**
  * How rigged GLB characters are lit. Tuned in the Joe lookdev page so the skin reads like the
@@ -107,6 +107,25 @@ export function roundRect(g, x, y, w, h, r) {
   g.arcTo(x, y + h, x, y, r);
   g.arcTo(x, y, x + w, y, r);
   g.closePath();
+}
+
+let sparkleTex = null;
+function sparkleTexture() {
+  if (sparkleTex) return sparkleTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.25, 'rgba(220,240,255,0.6)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = 'rgba(255,255,255,0.95)';
+  g.fillRect(31, 2, 2, 60);
+  g.fillRect(2, 31, 60, 2);
+  sparkleTex = new THREE.CanvasTexture(c);
+  return sparkleTex;
 }
 
 export class Character {
@@ -341,6 +360,8 @@ export class Character {
     model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     applyLook(model);
     this.model = model;
+    this.extras = extrasOf(this.data.name);
+    if (this.extras.ring) this.addRing(model);
     // name tag + emote bubble sit above the head, whatever the height
     this.label.position.y = 2.45 + 2.0 * (this.heightMul - 1);
     this.emoteBase = 2.35 + 2.0 * (this.heightMul - 1);
@@ -354,6 +375,35 @@ export class Character {
       this.currentAction = null;
       this.setState(this.state, this.stateDur); // models load async: pick up whatever they're doing now
     }
+  }
+
+  /** A gold engagement ring with a sparkling diamond on the left ring finger. */
+  addRing(model) {
+    const hand = model.getObjectByName('handL');
+    if (!hand) return;
+    const gold = new THREE.MeshStandardMaterial({ color: '#f5c64f', metalness: 0.85, roughness: 0.28, emissive: '#7a5410', emissiveIntensity: 0.6 });
+    const stone = new THREE.MeshStandardMaterial({ color: '#ffffff', metalness: 0.1, roughness: 0.02, emissive: '#cfefff', emissiveIntensity: 0.6 });
+    const ring = new THREE.Group();
+    ring.name = 'engagement_ring';
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.008, 10, 28), gold);
+    band.rotation.x = Math.PI / 2;            // the finger runs along the bone's Y axis
+    const setting = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.007, 0.012, 8), gold);
+    setting.position.z = -0.04;   // the stone faces the camera while she shows her hand
+    setting.rotation.x = Math.PI / 2;
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.024, 0), stone);
+    gem.position.z = -0.058;
+    gem.scale.set(1, 1, 1.25);
+    const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glint.position.z = -0.07;
+    glint.scale.setScalar(0.09);
+    ring.add(band, setting, gem, glint);
+    // the hand bone runs wrist -> fingertips along +Y; ring sits ~55% along it, on the ring-finger side
+    const tip = hand.children.length ? hand.children[0].position.length() : 0.12;
+    ring.position.set(0, Math.max(0.06, tip * 0.55), 0);
+    hand.add(ring);
+    ring.traverse((o) => { o.castShadow = false; });
+    this.ring = ring;
+    this.ringGlint = glint;
   }
 
   clearModel() {
@@ -682,7 +732,7 @@ export class Character {
       }
       case 'intro': {
         if (this.clips) {
-          const seq = ['wave', 'dance', 'excited', 'dance'];
+          const seq = this.extras?.intro || ['wave', 'dance', 'excited', 'dance'];   // Caro: shows off her ring
           this.playClip(seq[Math.floor(t / 2.4) % seq.length]);
         }
         // placeholder "showing off" loop until the real rigged animation arrives (clip: intro / pose / showoff)
@@ -730,6 +780,11 @@ export class Character {
     // sitting reactions stay seated
     if (this.baseState === 'sit' && this.state !== 'sit' && this.state !== 'walk' && this.state !== 'stumble') {
       b.position.y += this.seatY - (this.model ? 0.5 : 0.44);
+    }
+    if (this.ringGlint) {
+      const tw = Math.max(0, Math.sin(T * 3.1)) ** 8 + (this.state === 'intro' ? 0.6 : 0.25);
+      this.ringGlint.material.opacity = Math.min(1, tw);
+      this.ringGlint.scale.setScalar(this.state === 'intro' ? 0.12 + 0.16 * tw : 0.06 + 0.07 * tw);   // a big twinkle while she shows it off
     }
     // movie mode: a scene can take over the body (lie down, barrel roll, tumble over the rail…)
     if (this.bodyOverride) this.bodyOverride(b, dt);
