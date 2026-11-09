@@ -233,7 +233,7 @@ function buildStartLabel() {
   const [x, z] = spots().start;
   startLabel.position.set(x, 2.15, z);
   startLabel.userData.base = startLabel.position.y;
-  world.stage.add(startLabel);
+  // not added to the scene: the floating START GAME label read as a moving blob above the pedestal (menu button starts the game)
 }
 
 // ------------------------------------------------------------------
@@ -489,7 +489,7 @@ function showMenu(intro = false) {
   world.setDoors(false);
   if (world.startPedestal) world.startPedestal.visible = true;
   if (world.startButton) world.startButton.visible = true;
-  if (startLabel) startLabel.visible = true;
+  if (startLabel) startLabel.visible = false;
   setMusicState('menu', 1.5);
   if (intro) {
     rig.setShift(0);
@@ -1489,7 +1489,7 @@ function hitStart(e) {
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
-  const targets = [world.startPedestal, world.startButton, startLabel].filter(Boolean);
+  const targets = [world.startPedestal, world.startButton].filter(Boolean);
   return raycaster.intersectObjects(targets, false).length > 0;
 }
 canvas.addEventListener('pointerdown', (e) => { explore?.onPointerDown(e); });
