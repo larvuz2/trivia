@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { heightOf } from './data.js';
 
 /**
  * How rigged GLB characters are lit. Tuned in the Joe lookdev page so the skin reads like the
@@ -329,7 +330,8 @@ export class Character {
     const model = SkeletonUtils.clone(gltf.scene);
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
-    const s = 2.0 / (size.y || 1);
+    this.heightMul = heightOf(this.data.name);
+    const s = (2.0 * this.heightMul) / (size.y || 1);
     model.scale.setScalar(s);
     box.setFromObject(model);
     const c = box.getCenter(new THREE.Vector3());
@@ -339,6 +341,10 @@ export class Character {
     model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     applyLook(model);
     this.model = model;
+    // name tag + emote bubble sit above the head, whatever the height
+    this.label.position.y = 2.45 + 2.0 * (this.heightMul - 1);
+    this.emoteBase = 2.35 + 2.0 * (this.heightMul - 1);
+    this.emote.position.y = this.emoteBase;
     this.body.add(model);
     this.placeholder.visible = false;
     if (gltf.animations?.length) {
@@ -490,7 +496,7 @@ export class Character {
 
     if (this.emote.visible) {
       this.emoteT -= dt;
-      this.emote.position.y = 2.35 + Math.sin(T * 4) * 0.05;
+      this.emote.position.y = (this.emoteBase || 2.35) + Math.sin(T * 4) * 0.05;
       if (this.emoteT <= 0) this.emote.visible = false;
     }
 
