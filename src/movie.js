@@ -574,6 +574,9 @@ export class MovieMode {
     this.world.setParty(0);
     const gab = this.who('gabriel');
     this.put(gab, 5.45, 0, 14.5, Math.PI / 2, 'fish', 0);
+    // JP and Fer keep him company on the side deck (Fer with a margarita)
+    this.fans = [this.put(this.who('jp'), 4.55, 0, 13.4, Math.PI / 2 + 0.35, 'idle2'), this.put(this.who('fer'), 4.6, 0, 15.6, Math.PI / 2 - 0.4, 'cheers')].filter(Boolean);
+    if (this.who('fer')) this.hold(this.who('fer'), 'margarita');
     const rod = this.prop('rod', 1);
     const bob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8), new THREE.MeshStandardMaterial({ color: '#ff3b3b', roughness: 0.4 }));
     bob.userData.own = true;
@@ -652,6 +655,7 @@ export class MovieMode {
     gab.stateDur = 2.2;
     gab.setState('excited', 2.2);
     gab.baseState = 'fish';
+    for (const f of this.fans || []) { f.stateDur = 2.4; f.setState('excited', 2.4); }
     this.cam([7.6, 1.55, 16.2], [5.5, 1.4, 14.5], 40);
     this.move([7.2, 1.6, 15.8], [5.5, 1.45, 14.5], 3.6);
     await this.wait(3700);
@@ -667,6 +671,8 @@ export class MovieMode {
     this.put(this.who('ray'), -4.9, 0, 0.35, Math.PI / 2 + 0.25, 'excited');
     this.put(this.who('pau'), -4.85, 0, 2.1, Math.PI / 2 - 0.25, 'dance2');
     this.put(this.who('gabriel'), -5.45, 0, 2.85, Math.PI / 2 - 0.4, 'wave');
+    this.put(this.who('jp'), -5.3, 0, -0.45, Math.PI / 2 + 0.45, 'dance');
+    this.put(this.who('fer'), -5.25, 0, 3.55, Math.PI / 2 - 0.5, 'excited');
     const phone = this.prop('phone', 1.4);
     const head = V(0, 0, 0);
     const p = V(0, 0, 0);
@@ -710,7 +716,7 @@ export class MovieMode {
     gus.baseState = 'excited';
     gus.setState('excited');
     sfx('boing');
-    for (const n of ['ray', 'gabriel', 'pau']) this.act(this.who(n), 'excited');
+    for (const n of ['ray', 'gabriel', 'pau', 'jp', 'fer']) this.act(this.who(n), 'excited');
     await this.wait(1250);
     sfx('splash');
     this.splash.burst(this.sw(-8.2, WATER, z0), 180);
@@ -720,7 +726,7 @@ export class MovieMode {
     gus.body.rotation.set(0, 0, 0);
     this.put(gus, -8.2, WATER - 1.0, z0, -Math.PI / 2 + Math.PI, 'swim');
     gus.blob.visible = false;
-    for (const [n, z] of [['ray', 0.35], ['pau', 1.3], ['gabriel', 2.2]]) this.put(this.who(n), -5.55, 0, z, -Math.PI / 2, 'laugh');
+    for (const [n, z] of [['jp', -0.6], ['ray', 0.35], ['pau', 1.3], ['gabriel', 2.2], ['fer', 3.15]]) this.put(this.who(n), -5.55, 0, z, -Math.PI / 2, 'laugh');
     this.cam([-12.4, -1.9, -0.6], [-7.0, -1.3, 1.2], 44);
     this.move([-12.0, -1.7, 0.0], [-7.2, -1.2, 1.2], 4.0);
     await this.wait(1000);
