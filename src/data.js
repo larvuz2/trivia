@@ -28,7 +28,7 @@ export function builtinSticker(name) {
   return BUILTIN_MODELS[k] ? `img/stickers/${k}.png` : null;
 }
 // Height multipliers for built-in characters (everyone else is the standard 2.0). JP is the tallest boy.
-export const CHARACTER_HEIGHT = { jp: 1.25 };
+export const CHARACTER_HEIGHT = { jp: 1.15 };
 export function heightOf(name) {
   return CHARACTER_HEIGHT[String(name || '').trim().toLowerCase()] || 1;
 }
