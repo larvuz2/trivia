@@ -103,6 +103,7 @@ async function init() {
     canvas,
     splash,
     characters: () => characters,
+    boxVideo: () => config.settings.boxVideo || null,
     onExit: () => showMenu(),
   });
   movie = new MovieMode({

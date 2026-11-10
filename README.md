@@ -120,6 +120,10 @@ Physics props are tagged in Blender (`dynamic()` in `tools/blender/yacht.py` →
 8 stools, 3 tables, 60 bottles, 6 cocktail glasses, the champagne bucket, the fruit bowl and 3 bean bags.
 The rest of the yacht is one static collision mesh. Rapier only downloads when Explore is opened.
 
+**📦 Deck box video:** upload a video in Setup → Settings → *Deck box video* (not part of the trivia). In Explore there's a
+cardboard box on the deck; walk up to it and press **E** to play the video full screen (✕ / Esc closes it and you keep
+walking). The video starts loading as soon as Explore opens, with a spinner if it isn't ready yet.
+
 ## Host controls (keyboard)
 
 **↺ Start over** (corner button, during a game): after a confirmation it clears the current game — teams, scores,

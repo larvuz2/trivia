@@ -178,6 +178,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
     }
     if (tab === 'settings') {
       const s = cfg.settings;
+      const boxURL = s.boxVideo ? await mediaURL(s.boxVideo).catch(() => null) : null;
       const tg = (k, l, d) => `<label class="toggle"><input type="checkbox" data-sf="${k}" ${s[k] ? 'checked' : ''}><span class="sw"></span><span><b>${l}</b><small>${d}</small></span></label>`;
       return `<div class="a-card">
           <div class="row">
@@ -194,6 +195,12 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
           ${tg('animations', 'Cinematic transitions', 'The 5-second camera move before each question')}
           ${tg('sound', 'Sound effects', '')}
           ${tg('music', 'Music', '')}
+        </div>
+        <div class="a-card">
+          <h3>📦 Deck box video</h3>
+          <p class="hint">Not part of the trivia. In <b>🕹️ Explore</b>, walk up to the cardboard box on the deck and press <b>E</b> — this video plays full screen (✕ to close and keep walking).</p>
+          <div class="row files"><label class="file-btn" title="Up to ~50 MB; mp4 works everywhere">🎬 Upload video<input type="file" accept="video/*" data-bvup></label>
+          ${s.boxVideo ? `${boxURL ? `<video class="q-thumb q-vthumb" src="${boxURL}#t=0.5" muted playsinline preload="metadata"></video>` : '<span class="tag">video ✓</span>'}<button class="btn-mini" data-bvclear>✕ video</button>` : '<span class="tag">none</span>'}</div>
         </div>`;
     }
     if (tab === 'data') {
@@ -245,6 +252,12 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
     if (pv) return previewCharacter?.(pv.dataset.preview);
     const qpv = t.closest('[data-qpreview]');
     if (qpv) return previewQuestion?.(qCat, +qpv.dataset.qpreview);
+    if (t.closest('[data-bvclear]')) {
+      await deleteMedia(cfg.settings.boxVideo);
+      cfg.settings.boxVideo = null;
+      changed('content', true);
+      return render();
+    }
     const qvc = t.closest('[data-qvclear]');
     if (qvc) {
       const q = cfg.questions[qCat][+qvc.dataset.qvclear];
@@ -378,12 +391,13 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
       }
       return;
     }
-    if (t.dataset.qvup !== undefined && file.size > MAX_VIDEO) {
+    const isVideo = t.dataset.qvup !== undefined || t.dataset.bvup !== undefined;
+    if (isVideo && file.size > MAX_VIDEO) {
       alert(`That video is ${(file.size / 1e6).toFixed(0)} MB — please keep it under ${MAX_VIDEO / 1e6} MB (a short clip, 720p).`);
       return;
     }
     let busy = null;
-    if (t.dataset.qvup !== undefined) {
+    if (isVideo) {
       busy = document.createElement('div');
       busy.className = 'upload-busy';
       busy.textContent = '⏫ Uploading video…';
@@ -391,7 +405,11 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
     }
     let ref;
     try { ref = await putMedia(file); } finally { busy?.remove(); }
-    if (t.dataset.qvup !== undefined) {
+    if (t.dataset.bvup !== undefined) {
+      await deleteMedia(cfg.settings.boxVideo);
+      cfg.settings.boxVideo = ref;
+      changed('content', true);
+    } else if (t.dataset.qvup !== undefined) {
       const q = cfg.questions[qCat][+t.dataset.qvup];
       await deleteMedia(q.answerVideo);
       q.answerVideo = ref;

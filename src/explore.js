@@ -4,7 +4,8 @@
 // stools, tables, bottles, glasses, the bucket, fruit bowl and bean bags are dynamic bodies
 // (tagged in Blender via glTF extras: { dyn: 'cylinder' | 'ball', mass }).
 import * as THREE from 'three';
-import { sfx } from './audio.js';
+import { sfx, setMusicState, getMusicState } from './audio.js';
+import { mediaURL } from './storage.js';
 
 const STEP = 1 / 60;
 const GRAVITY = -20;
@@ -14,6 +15,36 @@ const JUMP = 8.6;
 const CAP_HALF = 0.6;   // capsule half-height (cylinder part)
 const CAP_R = 0.38;
 const FOOT = CAP_HALF + CAP_R; // body centre -> feet
+
+// the shipping box on the deck that plays the host's video (Setup → Settings → Deck box video)
+const BOX_AT = { x: 3.4, z: -3.2 };   // relative to the stage centre, yacht space
+const BOX_SIZE = 0.8;
+const BOX_REACH = 1.9;
+
+function cardboardTexture(letter) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#b8864f';
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 900; i++) {           // fibres
+    g.fillStyle = `rgba(${Math.random() < 0.5 ? '90,60,30' : '230,190,140'},${Math.random() * 0.12})`;
+    g.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 1);
+  }
+  g.fillStyle = 'rgba(200,170,110,0.85)';    // packing tape
+  g.fillRect(104, 0, 48, 256);
+  if (letter) {
+    g.fillStyle = '#1c1c1c';
+    g.beginPath(); g.arc(128, 128, 62, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff';
+    g.font = 'bold 84px sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(letter, 128, 134);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 const SOUND = { bottle: 'clink', glass: 'clink', stool: 'clank', bucket: 'clank', table: 'knock', bowl: 'knock', beanbag: null };
 
@@ -147,6 +178,8 @@ export class ExploreMode {
     this.showLoading(true);
     await this.ensurePhysics();
     this.showLoading(false);
+    this.buildBox();
+    this.prepVideo();
     this.active = true;
     this.world.setPropBatching?.(false);   // the real physics bottles
     this.chars = this.characters();
@@ -166,8 +199,10 @@ export class ExploreMode {
     this.keys.clear();
     this.resetProps();
     this.world.setPropBatching?.(true);    // back to the merged display copy
+    this.closeVideo();
     this.hud?.remove();
     this.hud = null;
+    if (this.box) this.box.visible = false;
     this.rig.fovTarget = 42;
     this.rig.sway = 1;
     if (this.player) {
@@ -229,7 +264,7 @@ export class ExploreMode {
         <button class="btn btn-ghost" data-x="reset" title="Put everything back (R)">↺ Reset props</button>
       </div>
       <div class="xh-help">
-        <b>WASD / ←↑↓→</b> walk · <b>Shift</b> run · <b>Space</b> jump · <b>E</b> shove · <b>Click</b> poke · <b>Drag</b> look · <b>Scroll</b> zoom
+        <b>WASD / ←↑↓→</b> walk · <b>Shift</b> run · <b>Space</b> jump · <b>E</b> shove (or 📦 video) · <b>Click</b> poke · <b>Drag</b> look · <b>Scroll</b> zoom
       </div>
     </div>`);
     this.hud.addEventListener('click', (e) => {
@@ -252,10 +287,11 @@ export class ExploreMode {
   onKeyDown(e) {
     if (!this.active) return false;
     const k = e.key.toLowerCase();
+    if (this.videoEl) { if (k === 'escape' || k === 'x') this.closeVideo(); return true; }
     if (k === 'escape') { this.exit(); return true; }
     if (k === 'tab') { e.preventDefault(); this.switchPlayer(); return true; }
     if (k === ' ') { e.preventDefault(); if (!e.repeat) this.jumpQueued = true; return true; }
-    if (k === 'e' && !e.repeat) { this.shove(); return true; }
+    if (k === 'e' && !e.repeat) { if (this.nearBox) this.playVideo(); else this.shove(); return true; }
     if (k === 'r' && !e.repeat) { this.resetProps(); sfx('pop'); return true; }
     this.keys.add(k);
     if (k.startsWith('arrow')) e.preventDefault();
@@ -269,7 +305,9 @@ export class ExploreMode {
   }
 
   onPointerDown(e) {
-    if (!this.active || e.button !== 0) return false;
+    if (!this.active) return false;
+    if (this.videoEl) return true;
+    if (e.button !== 0) return false;
     this.drag = { x: e.clientX, y: e.clientY, moved: 0 };
     return true;
   }
@@ -372,9 +410,128 @@ export class ExploreMode {
     sfx(any ? 'swoosh' : 'whoosh');
   }
 
+  // ------------------------------------------------------------------ video box
+  buildBox() {
+    if (this.box) { this.box.visible = true; return; }
+    const s = this.world.stage.position;
+    const x = s.x + BOX_AT.x;
+    const z = s.z + BOX_AT.z;
+    // sit it on whatever deck is below
+    const top = s.y + 3;
+    const hit = this.pw.castRay(new this.R.Ray({ x, y: top, z }, { x: 0, y: -1, z: 0 }), 10, true, undefined, undefined, this.collider);
+    const y = hit ? top - (hit.toi ?? hit.timeOfImpact) : s.y;
+    const side = new THREE.MeshStandardMaterial({ map: cardboardTexture('E'), roughness: 0.9 });
+    const lid = new THREE.MeshStandardMaterial({ map: cardboardTexture(''), roughness: 0.9 });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE * 0.8, BOX_SIZE), [side, side, lid, lid, side, side]);
+    box.position.set(x, y + BOX_SIZE * 0.4, z);
+    box.rotation.y = 0.35;
+    box.castShadow = box.receiveShadow = true;
+    // floating "E" key above it
+    const kc = document.createElement('canvas');
+    kc.width = kc.height = 128;
+    const g = kc.getContext('2d');
+    g.fillStyle = '#fff'; g.beginPath(); g.roundRect(10, 10, 108, 108, 24); g.fill();
+    g.fillStyle = '#1a2449'; g.font = 'bold 74px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('E', 64, 70);
+    const kt = new THREE.CanvasTexture(kc);
+    kt.colorSpace = THREE.SRGBColorSpace;
+    this.boxKey = new THREE.Sprite(new THREE.SpriteMaterial({ map: kt, depthTest: false, transparent: true }));
+    this.boxKey.scale.setScalar(0.42);
+    this.boxKey.renderOrder = 10;
+    box.add(this.boxKey);
+    this.boxKeyY = BOX_SIZE * 0.4 + 0.45;
+    this.boxKey.position.y = this.boxKeyY;
+    this.world.yacht.add(box);
+    this.box = box;
+    const R = this.R;
+    this.pw.createCollider(R.ColliderDesc.cuboid(BOX_SIZE / 2, BOX_SIZE * 0.4, BOX_SIZE / 2)
+      .setTranslation(x, y + BOX_SIZE * 0.4, z)
+      .setRotation({ x: 0, y: Math.sin(0.175), z: 0, w: Math.cos(0.175) }));
+  }
+
+  updateBox(t) {
+    if (!this.box) return;
+    const b = this.box.position;
+    const d = Math.hypot(b.x - t.x, b.z - t.z);
+    this.nearBox = d < BOX_REACH && Math.abs(b.y - (t.y - FOOT)) < 1.5;
+    const time = performance.now() / 1000;
+    this.boxKey.position.y = this.boxKeyY + Math.sin(time * 3) * 0.06;
+    this.boxKey.scale.setScalar(this.nearBox ? 0.5 + Math.sin(time * 6) * 0.03 : 0.36);
+    if (this.hud) {
+      let p = this.hud.querySelector('.xh-prompt');
+      if (this.nearBox && !p) {
+        p = el('<div class="xh-prompt"><kbd>E</kbd> Play video</div>');
+        this.hud.appendChild(p);
+      } else if (!this.nearBox && p) p.remove();
+    }
+  }
+
+  /** Start loading the video as soon as explore opens, so it's ready by the time you reach the box. */
+  async prepVideo() {
+    const ref = this.boxVideo?.() || null;
+    if (ref === this.videoRef) return;
+    this.videoRef = ref;
+    this.videoSrc = null;
+    if (this.preload) { this.preload.removeAttribute('src'); this.preload.load(); }
+    this.preload = null;
+    if (!ref) return;
+    try {
+      const url = await mediaURL(ref);
+      if (this.videoRef !== ref) return;
+      this.videoSrc = url;
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.playsInline = true;
+      v.src = url;
+      v.load();
+      this.preload = v;
+    } catch { this.videoRef = null; }
+  }
+
+  async playVideo() {
+    if (this.videoEl) return;
+    this.keys.clear();
+    sfx('pop');
+    const ov = el(`<div class="box-video">
+      <button class="bv-close" title="Close (Esc)">✕</button>
+      <div class="bv-loading"><div class="bv-spin"></div><span>Loading video…</span></div>
+    </div>`);
+    ov.querySelector('.bv-close').onclick = () => this.closeVideo();
+    document.body.appendChild(ov);
+    this.videoEl = ov;
+    this.musicBefore = getMusicState();
+    setMusicState('duck', 0.4);
+    const loading = ov.querySelector('.bv-loading');
+    if (!this.videoSrc) await this.prepVideo();
+    if (this.videoEl !== ov) return;
+    if (!this.videoSrc) {
+      loading.innerHTML = '<span>📦 No video yet — add one in <b>Setup → Settings → Deck box video</b>.</span>';
+      return;
+    }
+    const v = this.preload || document.createElement('video');
+    if (!v.src) v.src = this.videoSrc;
+    v.controls = true;
+    v.playsInline = true;
+    v.currentTime = 0;
+    v.className = 'bv-player';
+    ov.insertBefore(v, loading);
+    const ready = () => loading.remove();
+    if (v.readyState >= 3) ready();
+    else v.addEventListener('canplay', ready, { once: true });
+    v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+  }
+
+  closeVideo() {
+    if (!this.videoEl) return;
+    const v = this.videoEl.querySelector('video');
+    if (v) { v.pause(); v.remove(); v.controls = false; }
+    this.videoEl.remove();
+    this.videoEl = null;
+    setMusicState(this.musicBefore && this.musicBefore !== 'duck' ? this.musicBefore : 'menu', 0.8);
+  }
+
   // ------------------------------------------------------------------ simulation
   step(h) {
-    const k = this.keys;
+    const k = this.videoEl ? new Set() : this.keys;
     let ix = 0;
     let iz = 0;
     if (k.has('w') || k.has('arrowup')) iz += 1;
@@ -469,6 +626,7 @@ export class ExploreMode {
     const sp = this.moveVec ? Math.hypot(this.moveVec.x, this.moveVec.z) : 0;
     if (sp > 0.1) ch.targetFacing = Math.atan2(this.moveVec.x, this.moveVec.z);
     ch.moveSpeed = sp;
+    this.updateBox(t);
     const want = this.grounded ? 'move' : 'air';
     if (ch.state !== want && (ch.state === 'move' || ch.state === 'air' || ch.state === 'idle')) ch.setState(want);
   }
