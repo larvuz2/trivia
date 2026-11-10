@@ -682,3 +682,5 @@ textarea { resize: vertical; }
 
 .movie-pack { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0 0 12px;
   padding: 10px 14px; border-radius: 14px; background: rgba(20,184,166,0.12); border: 2px dashed rgba(20,184,166,0.5); font-size: 14px; }
+
+.q-vthumb { width: auto; background: #000; }

@@ -127,6 +127,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
         const img = q.image ? await mediaURL(q.image) : null;
         const after = q.answerImage ? await mediaURL(q.answerImage) : null;
         const hasVideo = !!q.answerVideo;
+        const vidURL = hasVideo ? await mediaURL(q.answerVideo).catch(() => null) : null;
         return `<div class="a-card q-edit" data-r="${r}">
           <div class="q-edit-pts" style="--cat:${cfg.categories[qCat].color}">${POINTS[r]}</div>
           <div class="grow">
@@ -153,7 +154,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
               <label class="file-btn">🖼 Answer image<input type="file" accept="image/*" data-qaup="${r}"></label>
               ${after ? `<img class="q-thumb" src="${after}"><button class="btn-mini" data-qaclear="${r}">✕</button>` : '<span class="tag dim">none</span>'}
               <label class="file-btn" title="Plays when the answer is revealed (up to ~50 MB; mp4 works everywhere)">🎬 Answer video<input type="file" accept="video/*" data-qvup="${r}"></label>
-              ${hasVideo ? `<span class="tag">video ✓</span><button class="btn-mini" data-qvclear="${r}">✕</button>` : ''}
+              ${hasVideo ? `${vidURL ? `<video class="q-thumb q-vthumb" src="${vidURL}#t=0.5" muted playsinline preload="metadata" title="Answer video"></video>` : '<span class="tag">video ✓</span>'}<button class="btn-mini" data-qvclear="${r}">✕</button>` : ''}
               <button class="btn-mini q-preview-btn" data-qpreview="${r}">▶ Preview</button>
             </div>
           </div>
