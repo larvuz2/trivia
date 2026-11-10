@@ -8,6 +8,7 @@ import { sfx, unlockAudio, startMusic, setAudioEnabled, setMusicState } from './
 import { IntroDirector } from './intro.js';
 import { ExploreMode } from './explore.js';
 import { MovieMode } from './movie.js';
+import { markedImage } from './qmark.js';
 import { loadConfig, saveConfig, loadGame, saveGame, clearGame, mediaURL, loadCloudConfig } from './storage.js';
 import * as G from './game.js';
 import { POINTS, builtinModel, builtinSticker } from './data.js';
@@ -973,10 +974,11 @@ function clearGuests() {
 }
 
 /** Question image(s): the "before" image, and an optional "after" image that replaces it on reveal. */
-function qImageHTML(imgURL, afterURL) {
+function qImageHTML(imgURL, afterURL, mark = null) {
   if (!imgURL && !afterURL) return '';
   const cls = [!imgURL ? 'after-only' : '', afterURL ? 'has-after' : ''].join(' ');
-  return `<div class="q-image ${cls}">${imgURL ? `<img class="qi-before" src="${imgURL}" alt="">` : ''}${afterURL ? `<img class="qi-after" src="${afterURL}" alt="">` : ''}</div>`;
+  // the "?" mark sits on the question image only, never on the answer image
+  return `<div class="q-image ${cls}">${imgURL ? markedImage(imgURL, mark, 'qi-before') : ''}${afterURL ? markedImage(afterURL, null, 'qi-after') : ''}</div>`;
 }
 
 async function showQuestion() {
@@ -998,7 +1000,7 @@ async function showQuestion() {
           <span class="q-chip q-points">${cur.points} POINTS${cur.double ? ' · ×2' : ''}</span>
           <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
         </div>
-        ${qImageHTML(imgURL, afterURL)}
+        ${qImageHTML(imgURL, afterURL, q.mark)}
         ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title)}</h1>` : ''}
         ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
         <div class="q-answering" style="--team:${teamColor(cur.answering)}"><span>${esc(player.data.name)}</span> answers for ${esc(teamName(cur.answering))}!</div>
@@ -1053,7 +1055,7 @@ async function previewQuestion(ci, r) {
           <span class="q-chip q-points">${POINTS[r]} POINTS</span>
           <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
         </div>
-        ${qImageHTML(imgURL, afterURL)}
+        ${qImageHTML(imgURL, afterURL, q.mark)}
         ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title || '(no question yet)')}</h1>` : ''}
         ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
         <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer || '(no answer yet)')}</div>${q.explanation ? `<div class="q-explain">${esc(q.explanation)}</div>` : ''}</div>

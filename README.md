@@ -208,7 +208,8 @@ Click **⚙ Game Setup** on the main menu. Everything saves in the browser as yo
 - **Categories** — name, icon, color and which 3D transition each column uses.
 - **Questions** — 25 editors: title, private answer, explanation, format (text / image + question / image only),
   a question image (before the reveal) and an optional answer image that replaces it when the answer is revealed,
-  which boy it's about, and a "funny" flag. **▶ Preview** plays that one question exactly as in the game
+  which boy it's about, and a "funny" flag. **❓ Add ? mark** puts a black circle with a white question mark on
+  the question image (drag to place, drag the corner / slider / wheel to resize; never on the answer image). **▶ Preview** plays that one question exactly as in the game
   (Space = reveal / back, Esc = close).
 - **Final Splash**, **Settings** (timer, stealing, penalties, Double Trouble, Ask the Boys, sound, music, team names/colors).
 - **Save / Load** — download everything (including photos and models) as one `.json` file and load it on the party laptop.

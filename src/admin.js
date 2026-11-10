@@ -2,6 +2,7 @@
 import { POINTS, defaultConfig, builtinModel, movieQuestions } from './data.js';
 import { putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame, cloud, onCloudChange, getAdminKey, setAdminKey, checkAdminKey, publishAll, loadCloudConfig, deviceOnlyMedia, pushCloud } from './storage.js';
 import { defaultSticker } from './characters.js';
+import { editMark, markedImage } from './qmark.js';
 
 const TRANSITIONS = [
   ['album', '📸 Photo album lands'],
@@ -145,7 +146,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
             <div class="row files">
               <span class="q-img-label">Before reveal</span>
               <label class="file-btn">🖼 Question image<input type="file" accept="image/*" data-qup="${r}"></label>
-              ${img ? `<img class="q-thumb" src="${img}"><button class="btn-mini" data-qclear="${r}">✕</button>` : '<span class="tag dim">none</span>'}
+              ${img ? `${markedImage(img, q.mark, 'q-thumb-wrap')}<button class="btn-mini" data-qmark="${r}" title="Black circle with a white ? on top of the question image">${q.mark ? '❓ Edit ? mark' : '❓ Add ? mark'}</button><button class="btn-mini" data-qclear="${r}">✕</button>` : '<span class="tag dim">none</span>'}
               <span class="q-img-arrow">→</span>
               <span class="q-img-label">After reveal (optional)</span>
               <label class="file-btn">🖼 Answer image<input type="file" accept="image/*" data-qaup="${r}"></label>
@@ -257,11 +258,21 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
       changed(f === 'model' ? 'model' : 'characters', true);
       return render();
     }
+    const qmk = t.closest('[data-qmark]');
+    if (qmk) {
+      const q = cfg.questions[qCat][+qmk.dataset.qmark];
+      const res = await editMark(await mediaURL(q.image), q.mark);
+      if (res === undefined) return;
+      q.mark = res;
+      changed('content', true);
+      return render();
+    }
     const qcl = t.closest('[data-qclear]');
     if (qcl) {
       const r = +qcl.dataset.qclear;
       await deleteMedia(cfg.questions[qCat][r].image);
       cfg.questions[qCat][r].image = null;
+      cfg.questions[qCat][r].mark = null;
       changed('content', true);
       return render();
     }
