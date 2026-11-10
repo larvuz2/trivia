@@ -974,11 +974,29 @@ function clearGuests() {
 }
 
 /** Question image(s): the "before" image, and an optional "after" image that replaces it on reveal. */
-function qImageHTML(imgURL, afterURL, mark = null) {
-  if (!imgURL && !afterURL) return '';
-  const cls = [!imgURL ? 'after-only' : '', afterURL ? 'has-after' : ''].join(' ');
-  // the "?" mark sits on the question image only, never on the answer image
-  return `<div class="q-image ${cls}">${imgURL ? markedImage(imgURL, mark, 'qi-before') : ''}${afterURL ? markedImage(afterURL, null, 'qi-after') : ''}</div>`;
+function qImageHTML(imgURL, afterURL, mark = null, videoURL = null) {
+  if (!imgURL && !afterURL && !videoURL) return '';
+  const cls = [!imgURL ? 'after-only' : '', afterURL || videoURL ? 'has-after' : ''].join(' ');
+  // the "?" mark sits on the question image only; on reveal a video wins over an answer image
+  const after = videoURL
+    ? `<span class="qi-wrap qi-after qi-video"><video src="${videoURL}" preload="auto" playsinline controls></video></span>`
+    : afterURL ? markedImage(afterURL, null, 'qi-after') : '';
+  return `<div class="q-image ${cls}">${imgURL ? markedImage(imgURL, mark, 'qi-before') : ''}${after}</div>`;
+}
+
+/** Answer video: plays (with sound, music ducked) when the answer is revealed, stops when it's hidden again. */
+function syncRevealVideo(card, show) {
+  const v = card?.querySelector('.qi-video video');
+  if (!v) return;
+  if (show) {
+    v.currentTime = 0;
+    setMusicState('duck', 0.4);
+    v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    v.onended = () => setMusicState('question', 1.2);
+  } else {
+    v.pause();
+    setMusicState('question', 0.8);
+  }
 }
 
 async function showQuestion() {
@@ -987,6 +1005,7 @@ async function showQuestion() {
   const q = config.questions[cur.c][cur.r];
   const imgURL = q.image ? await mediaURL(q.image) : null;
   const afterURL = q.answerImage ? await mediaURL(q.answerImage) : null;
+  const videoURL = q.answerVideo ? await mediaURL(q.answerVideo).catch(() => null) : null;
   const format = imgURL ? q.format || 'image' : 'text';
   const subject = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
   turnShot(player, 'board', 1.0);
@@ -1000,7 +1019,7 @@ async function showQuestion() {
           <span class="q-chip q-points">${cur.points} POINTS${cur.double ? ' · ×2' : ''}</span>
           <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
         </div>
-        ${qImageHTML(imgURL, afterURL, q.mark)}
+        ${qImageHTML(imgURL, afterURL, q.mark, videoURL)}
         ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title)}</h1>` : ''}
         ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
         <div class="q-answering" style="--team:${teamColor(cur.answering)}"><span>${esc(player.data.name)}</span> answers for ${esc(teamName(cur.answering))}!</div>
@@ -1035,6 +1054,7 @@ function revealAnswer(force = null) {
   const show = force ?? a.classList.contains('hidden');
   a.classList.toggle('hidden', !show);
   a.closest('.q-card')?.classList.toggle('revealed', show);   // swaps in the "after" image, if any
+  syncRevealVideo(a.closest('.q-card'), show);
   if (show) sfx('sparkle');
 }
 
@@ -1044,6 +1064,7 @@ async function previewQuestion(ci, r) {
   const cat = config.categories[ci];
   const imgURL = q.image ? await mediaURL(q.image) : null;
   const afterURL = q.answerImage ? await mediaURL(q.answerImage) : null;
+  const videoURL = q.answerVideo ? await mediaURL(q.answerVideo).catch(() => null) : null;
   const format = imgURL ? q.format || 'image' : 'text';
   const subject = q.subject ? characters.find((c) => c.data.id === q.subject) : null;
   document.querySelector('.q-preview')?.remove();
@@ -1055,7 +1076,7 @@ async function previewQuestion(ci, r) {
           <span class="q-chip q-points">${POINTS[r]} POINTS</span>
           <span class="q-timer"><span class="q-timer-num">00:${String(config.settings.timer).padStart(2, '0')}</span></span>
         </div>
-        ${qImageHTML(imgURL, afterURL, q.mark)}
+        ${qImageHTML(imgURL, afterURL, q.mark, videoURL)}
         ${format !== 'imageOnly' || !imgURL ? `<h1 class="q-title">${esc(q.title || '(no question yet)')}</h1>` : ''}
         ${subject ? `<div class="q-subject">${stickerImg(subject, 'sm')} This one's about <b>${esc(subject.data.name)}</b></div>` : ''}
         <div class="q-answer hidden"><div class="q-answer-label">ANSWER</div><div class="q-answer-text">${esc(q.answer || '(no answer yet)')}</div>${q.explanation ? `<div class="q-explain">${esc(q.explanation)}</div>` : ''}</div>
@@ -1075,10 +1096,11 @@ async function previewQuestion(ci, r) {
     const show = a.classList.contains('hidden');
     a.classList.toggle('hidden', !show);
     card.classList.toggle('revealed', show);
+    syncRevealVideo(card, show);
     btn.innerHTML = show ? '↺ Back to question<kbd>Space</kbd>' : '👁 Reveal answer<kbd>Space</kbd>';
     if (show) sfx('sparkle');
   };
-  const close = () => { ov.remove(); window.removeEventListener('keydown', onKey, true); };
+  const close = () => { syncRevealVideo(card, false); ov.remove(); window.removeEventListener('keydown', onKey, true); };
   const onKey = (e) => {
     if (e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }

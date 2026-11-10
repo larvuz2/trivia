@@ -626,6 +626,9 @@ textarea { resize: vertical; }
 .qme-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .qme-row label { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .qme-btns { display: flex; gap: 8px; align-items: center; }
+.qi-video video { display: block; max-width: 100%; max-height: calc(40vh - 10px); background: #000; }
+.fmt-imageOnly .qi-video video { max-height: calc(60vh - 10px); }
+.upload-busy { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 140; background: var(--navy); color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 99px; box-shadow: var(--shadow); }
 .q-image .qi-after { display: none; }
 .q-card.revealed .q-image.has-after .qi-before { display: none; }
 .q-card.revealed .q-image .qi-after { display: inline-block; animation: pop-in 0.5s cubic-bezier(.2,1.6,.4,1) both; }

@@ -150,7 +150,28 @@ async function prepareUpload(blob) {
   }
 }
 
+const PART = 4 * 1024 * 1024;   // one upload request (Netlify functions take ~6 MB bodies)
+export const MAX_VIDEO = 50 * 1024 * 1024;
+
+/** Big files go up in parts; the ref is /api/media/<key>?parts=N and mediaURL() puts them back together. */
+async function uploadInParts(blob, name) {
+  const n = Math.ceil(blob.size / PART);
+  let key = '';
+  for (let i = 0; i < n; i++) {
+    const r = await fetch('/api/media', {
+      method: 'POST',
+      headers: { 'content-type': blob.type || 'application/octet-stream', 'x-admin-key': getAdminKey(), 'x-file-name': name, 'x-part': String(i), ...(key ? { 'x-upload-key': key } : {}) },
+      body: blob.slice(i * PART, (i + 1) * PART),
+    });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(res.error || `Upload failed (${r.status})`);
+    key = res.key;
+  }
+  return `/api/media/${key}?parts=${n}`;
+}
+
 async function uploadToCloud(blob, name = '') {
+  if (blob.size > PART) return uploadInParts(blob, name);
   const body = await prepareUpload(blob);
   const r = await fetch('/api/media', {
     method: 'POST',
@@ -167,7 +188,7 @@ export function deviceOnlyMedia(cfg) {
   let n = 0;
   const check = (ref) => { if (ref?.startsWith('idb:')) n++; };
   cfg.characters.forEach((c) => { check(c.sticker); check(c.model); });
-  cfg.questions.forEach((col) => col.forEach((q) => { check(q.image); check(q.answerImage); }));
+  cfg.questions.forEach((col) => col.forEach((q) => { check(q.image); check(q.answerImage); check(q.answerVideo); }));
   check(cfg.final?.image);
   return n;
 }
@@ -237,7 +258,9 @@ export async function putMedia(blob) {
 
 export async function deleteMedia(ref) {
   if (ref?.startsWith('/api/media/') && cloud.available && getAdminKey()) {
-    fetch(ref, { method: 'DELETE', headers: { 'x-admin-key': getAdminKey() } }).catch(() => {});
+    const [base, q] = ref.split('?parts=');
+    const urls = q ? Array.from({ length: +q }, (_, i) => `${base}.p${i}`) : [ref];
+    for (const u of urls) fetch(u, { method: 'DELETE', headers: { 'x-admin-key': getAdminKey() } }).catch(() => {});
     return;
   }
   if (!ref?.startsWith('idb:')) return;
@@ -254,6 +277,18 @@ async function getBlob(ref) {
 /** Resolve a media ref (idb:key, url or data url) to something an <img> or loader can use. */
 export async function mediaURL(ref) {
   if (!ref) return null;
+  if (ref.includes('?parts=')) {
+    // a big file uploaded in parts: fetch them all and play it from memory
+    if (urlCache.has(ref)) return urlCache.get(ref);
+    const [base, n] = ref.split('?parts=');
+    const p = Promise.all(Array.from({ length: +n }, (_, i) => fetch(`${base}.p${i}`).then((r) => {
+      if (!r.ok) throw new Error(`missing part ${i}`);
+      return r.blob();
+    }))).then((parts) => URL.createObjectURL(new Blob(parts, { type: parts[0]?.type || 'video/mp4' })));
+    urlCache.set(ref, p);
+    p.catch(() => urlCache.delete(ref));
+    return p;
+  }
   if (!ref.startsWith('idb:')) return ref;
   if (urlCache.has(ref)) return urlCache.get(ref);
   const blob = await getBlob(ref);
@@ -278,7 +313,7 @@ async function mapRefs(cfg, fn) {
     c.sticker = await fn(c.sticker);
     c.model = await fn(c.model);
   }
-  for (const col of out.questions) for (const q of col) { q.image = await fn(q.image); q.answerImage = await fn(q.answerImage ?? null); }
+  for (const col of out.questions) for (const q of col) { q.image = await fn(q.image); q.answerImage = await fn(q.answerImage ?? null); q.answerVideo = await fn(q.answerVideo ?? null); }
   out.final.image = await fn(out.final.image);
   return out;
 }

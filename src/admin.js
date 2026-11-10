@@ -1,6 +1,6 @@
 // Host-only Setup panel. Everything is saved to the browser as you type.
 import { POINTS, defaultConfig, builtinModel, movieQuestions } from './data.js';
-import { putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame, cloud, onCloudChange, getAdminKey, setAdminKey, checkAdminKey, publishAll, loadCloudConfig, deviceOnlyMedia, pushCloud } from './storage.js';
+import { MAX_VIDEO, putMedia, deleteMedia, mediaURL, exportConfig, importConfig, clearGame, cloud, onCloudChange, getAdminKey, setAdminKey, checkAdminKey, publishAll, loadCloudConfig, deviceOnlyMedia, pushCloud } from './storage.js';
 import { defaultSticker } from './characters.js';
 import { editMark, markedImage } from './qmark.js';
 
@@ -126,6 +126,7 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
       const items = await Promise.all(qs.map(async (q, r) => {
         const img = q.image ? await mediaURL(q.image) : null;
         const after = q.answerImage ? await mediaURL(q.answerImage) : null;
+        const hasVideo = !!q.answerVideo;
         return `<div class="a-card q-edit" data-r="${r}">
           <div class="q-edit-pts" style="--cat:${cfg.categories[qCat].color}">${POINTS[r]}</div>
           <div class="grow">
@@ -151,6 +152,8 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
               <span class="q-img-label">After reveal (optional)</span>
               <label class="file-btn">🖼 Answer image<input type="file" accept="image/*" data-qaup="${r}"></label>
               ${after ? `<img class="q-thumb" src="${after}"><button class="btn-mini" data-qaclear="${r}">✕</button>` : '<span class="tag dim">none</span>'}
+              <label class="file-btn" title="Plays when the answer is revealed (up to ~50 MB; mp4 works everywhere)">🎬 Answer video<input type="file" accept="video/*" data-qvup="${r}"></label>
+              ${hasVideo ? `<span class="tag">video ✓</span><button class="btn-mini" data-qvclear="${r}">✕</button>` : ''}
               <button class="btn-mini q-preview-btn" data-qpreview="${r}">▶ Preview</button>
             </div>
           </div>
@@ -241,6 +244,14 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
     if (pv) return previewCharacter?.(pv.dataset.preview);
     const qpv = t.closest('[data-qpreview]');
     if (qpv) return previewQuestion?.(qCat, +qpv.dataset.qpreview);
+    const qvc = t.closest('[data-qvclear]');
+    if (qvc) {
+      const q = cfg.questions[qCat][+qvc.dataset.qvclear];
+      await deleteMedia(q.answerVideo);
+      q.answerVideo = null;
+      changed('content', true);
+      return render();
+    }
     const qac = t.closest('[data-qaclear]');
     if (qac) {
       const q = cfg.questions[qCat][+qac.dataset.qaclear];
@@ -366,8 +377,25 @@ export function openAdmin({ config, onChange, onClose, previewCharacter, preview
       }
       return;
     }
-    const ref = await putMedia(file);
-    if (t.dataset.up) {
+    if (t.dataset.qvup !== undefined && file.size > MAX_VIDEO) {
+      alert(`That video is ${(file.size / 1e6).toFixed(0)} MB — please keep it under ${MAX_VIDEO / 1e6} MB (a short clip, 720p).`);
+      return;
+    }
+    let busy = null;
+    if (t.dataset.qvup !== undefined) {
+      busy = document.createElement('div');
+      busy.className = 'upload-busy';
+      busy.textContent = '⏫ Uploading video…';
+      document.body.appendChild(busy);
+    }
+    let ref;
+    try { ref = await putMedia(file); } finally { busy?.remove(); }
+    if (t.dataset.qvup !== undefined) {
+      const q = cfg.questions[qCat][+t.dataset.qvup];
+      await deleteMedia(q.answerVideo);
+      q.answerVideo = ref;
+      changed('content', true);
+    } else if (t.dataset.up) {
       const i = +t.closest('[data-i]').dataset.i;
       await deleteMedia(cfg.characters[i][t.dataset.up]);
       cfg.characters[i][t.dataset.up] = ref;

@@ -106,6 +106,7 @@ const Q = (title, answer, extra = {}) => ({
   explanation: '',
   image: null,
   answerImage: null, // optional: replaces the image when the answer is revealed
+  answerVideo: null, // optional: a video that plays when the answer is revealed (wins over answerImage)
   format: 'text', // 'text' | 'image' | 'imageOnly'
   subject: null, // character id the question is about (he reacts!)
   funny: false,
