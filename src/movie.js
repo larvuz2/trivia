@@ -272,10 +272,8 @@ export class MovieMode {
       { name: 'SUN’S OUT', setup: this.sunSetup, run: this.sunRun },
       { name: 'HOT TUB TIME', setup: this.tubSetup, run: this.tubRun },
       { name: 'DANCE FLOOR', setup: this.danceSetup, run: this.danceRun },
-      { name: 'SWIM CALL', setup: this.swimSetup, run: this.swimRun },
       { name: 'DJ JOE', setup: this.djSetup, run: this.djRun },
       { name: 'A FEW DRINKS LATER…', setup: this.rollSetup, run: this.rollRun },
-      { name: 'GONE FISHING', setup: this.fishSetup, run: this.fishRun },
       { name: 'SELFIE FAIL', setup: this.selfieSetup, run: this.selfieRun },
       { name: 'CONGA!', setup: this.congaSetup, run: this.congaRun },
     ];
@@ -328,15 +326,12 @@ export class MovieMode {
     };
   }
   async barRun() {
-    this.move([4.9, 1.6, 6.4], [4.0, 1.25, 3.5], 4.2);
-    await this.wait(4200);
+    // both shots from behind the counter, so we always see their faces
+    this.move([4.9, 1.6, 6.4], [4.0, 1.25, 3.5], 5.2);
+    await this.wait(5200);
     this.cam([3.55, 1.5, 5.75], [3.55, 1.5, 3.5], 32);
-    this.move([3.55, 1.45, 5.55], [3.55, 1.45, 3.5], 3.0);
-    await this.wait(3000);
-    // from the end of the bar: their profiles toasting, the neon behind
-    this.cam([0.5, 1.35, 2.6], [3.6, 1.4, 3.9], 42);
-    this.move([0.7, 1.5, 2.2], [3.9, 1.45, 3.9], 3.2);
-    await this.wait(3200);
+    this.move([3.55, 1.45, 5.45], [3.55, 1.45, 3.5], 5.0);
+    await this.wait(5000);
   }
 
   // 3 ── the girls sunbathing on the flybridge pads
@@ -514,19 +509,21 @@ export class MovieMode {
       acc = 0;
       for (const c of crowd) if (Math.random() < 0.4) this.act(c, ['dance', 'dance2', 'excited'][Math.floor(Math.random() * 3)]);
     };
-    this.cam([-3.5, 2.55, 7.4], [-3.8, 1.3, 2.4], 50);
+    // from over the crowd's heads, looking at Joe behind the decks
+    this.cam([-3.8, 2.42, 2.55], [-3.8, 2.0, 5.65], 44);   // past the bunting, under the flybridge ceiling, over their heads
   }
   async djRun() {
-    this.move([-3.0, 2.4, 7.2], [-3.8, 1.3, 2.4], 3.6);
+    this.move([-3.65, 2.4, 2.9], [-3.8, 2.0, 5.65], 3.6);
     await this.wait(3600);
-    // from the back of the crowd, looking up at Joe over their heads
-    this.cam([-3.2, 1.0, 0.4], [-3.8, 2.1, 5.6], 44);
-    this.move([-3.6, 1.15, 1.0], [-3.8, 2.2, 5.6], 3.0);
+    // from the end of the booth: Joe in profile on the decks, hands on the turntables, the crowd behind
+    this.cam([-0.9, 2.1, 6.3], [-3.8, 1.6, 5.3], 44);
+    this.move([-1.15, 2.0, 6.05], [-3.8, 1.6, 5.3], 3.0);
     sfx('scratch');
     await this.wait(3000);
-    this.cam([0.6, 1.7, 1.4], [-3.8, 1.5, 4.2], 44);
-    this.move([0.2, 1.9, 2.2], [-3.9, 1.5, 4.4], 3.4);
-    this.confettiAt(-3.8, 3, 3.2, 160, 3);
+    // close-up from the front of the booth: Joe on the decks, face on
+    this.cam([-3.5, 2.35, 4.15], [-3.8, 1.95, 5.65], 46);
+    this.move([-3.75, 2.3, 4.35], [-3.8, 1.95, 5.65], 3.4);
+    this.confettiAt(-2.6, 2.3, 2.8, 120, 2.5);
     await this.wait(3400);
   }
 
@@ -559,8 +556,9 @@ export class MovieMode {
     });
     this.hold(this.who('pau'), 'margarita');
     this.rest([this.who('ray'), ...fans.map(([n]) => this.who(n))]).forEach((c, i) => this.put(c, -1.4 + i * 2.6, 0, 2.0, Math.PI, i % 2 ? 'laugh' : 'cheers'));
-    this.cam([x0 + 0.6, 0.45, -4.6], [x0, 0.4, -1.4], 46);
-    this.rig.follow(() => ({ pos: this.sw(this.rollX + 0.9, 0.75, -5.4), look: this.sw(this.rollX - 0.5, 0.55, -1.0) }));
+    // top-down, tracking him as he rolls
+    this.cam([x0, 6.5, -2.0], [x0, 0.2, -1.4], 46);
+    this.rig.follow(() => ({ pos: this.sw(this.rollX, 6.5, -2.0), look: this.sw(this.rollX, 0.2, -1.4) }));
   }
   async rollRun() {
     await this.wait(5800);

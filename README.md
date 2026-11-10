@@ -88,12 +88,10 @@ and letterboxing, on a loop until you press **✕ Exit** (or Esc). **Next ⏭** 
 3. **Sun’s out** — the girls sunbathing on the flybridge pads (drone shot)
 4. **Hot tub time** — all eight in the jacuzzi upstairs
 5. **Dance floor** — a dance circle on the LED floor with the party lights
-6. **Swim call** — everyone in the water behind the boat, inflatables and a beach ball
-7. **DJ Joe** — Joe on the decks with headphones, the gang dancing in front
-8. **A few drinks later…** — Ray barrel-rolling across the deck while everyone laughs
-9. **Gone fishing** — Gabriel fishing off the side deck; a dorado jumps
-10. **Selfie fail** — Gus backs up for the perfect selfie… and goes overboard (still filming)
-11. **Conga!** — the conga line… and the domino pile-up
+6. **DJ Joe** — Joe on the decks with headphones, the gang dancing in front
+7. **A few drinks later…** — Ray barrel-rolling across the deck while everyone laughs
+8. **Selfie fail** — Gus backs up for the perfect selfie… and goes overboard (still filming)
+9. **Conga!** — the conga line… and the domino pile-up
 
 Props are built in Blender (`tools/blender/movie_props.py` → `public/models/movie_props.glb`): fishing rod,
 DJ headphones, cups, margarita, beer, phone, dorado and beach ball. The scene clips (cheers, sunbathe, swim, fish,
